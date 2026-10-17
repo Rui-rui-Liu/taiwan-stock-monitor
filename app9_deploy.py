@@ -9,11 +9,11 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="台股族群漲跌幅", layout="wide")
 
 # ==========================================
-# 【全域 UI 強制修正】：經典黑底風格 CSS 注入
+# 【全域 UI 與 CSS 注入】：支援 RWD 自動判定與經典黑底
 # ==========================================
 st.markdown("""
 <style>
-    /* 強制將整頁與主要容器改回黑底 */
+    /* 強制整頁與主要容器為經典黑底 */
     .stApp {
         background-color: #0E1117 !important;
         color: #FFFFFF !important;
@@ -21,21 +21,19 @@ st.markdown("""
     h1, h2, h3, h4, h5, h6, p, span, label {
         color: #FFFFFF !important;
     }
-    /* 極致緊縮大標題的上方間距 */
     h1 {
         padding-top: 0px !important;
         margin-top: -30px !important;
         padding-bottom: 0px !important;
         margin-bottom: 0px !important;
     }
-    /* 讓 st.columns 渲染出的每一行區塊底部留白 */
     [data-testid="stHorizontalBlock"] {
         margin-bottom: 8px !important;
     }
     .element-container {
         margin-bottom: 0px !important;
     }
-    /* 按鈕偽裝成純白大字 */
+    /* 桌機版標題按鈕樣式 */
     div.stButton > button, 
     div.stButton > button p, 
     div.stButton > button span {
@@ -49,7 +47,6 @@ st.markdown("""
         box-shadow: none !important;
         transition: color 0.1s ease;
     }
-    /* 滑鼠移過去時變橘色 */
     div.stButton > button:hover,
     div.stButton > button:hover p,
     div.stButton > button:hover span {
@@ -85,6 +82,22 @@ st.markdown("""
     [class*="st-key-sortbtn_"] div.stButton > button:hover span {
         color: #FF8500 !important;
     }
+
+    /* ==========================================
+       📱 自動 RWD 裝置切換機制 (Media Query)
+       ========================================== */
+    /* 桌機/平板大螢幕 (螢幕 > 768px) 時隱藏手機版視圖 */
+    @media (min-width: 769px) {
+        .mobile-only-view {
+            display: none !important;
+        }
+    }
+    /* 手機螢幕 (螢幕 <= 768px) 時隱藏桌機大表格，顯示手機極致卡片 */
+    @media (max-width: 768px) {
+        .desktop-only-view {
+            display: none !important;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -111,9 +124,7 @@ close, volume, twii, market_value, twii_amount = load_data()
 # ==========================================
 # 1. 側邊欄設定
 # ==========================================
-st.sidebar.header("看盤與監控設定")
-view_mode = st.sidebar.radio("版面模式", ["💻 桌機/平板橫向大表", "📱 手機極致卡片"], index=0)
-st.sidebar.markdown("---")
+st.sidebar.header("監控參數設定 (σ)")
 sigma_5 = st.sidebar.slider("近週 σ 倍數", min_value=0.0, max_value=3.0, value=1.0, step=0.1)
 sigma_20 = st.sidebar.slider("近月 σ 倍數", min_value=0.0, max_value=3.0, value=1.0, step=0.1)
 sigma_60 = st.sidebar.slider("近季 σ 倍數", min_value=0.0, max_value=3.0, value=1.0, step=0.1)
@@ -239,17 +250,17 @@ for g_name, ticker_dict in groups.items():
     
     if valid_tickers:
         raw_ret_1 = close[valid_tickers].pct_change(1, fill_method=None).mean(axis=1).iloc[-1]
-        row_entry["報酬_1"] = f"{raw_ret_1*100:.2f}%"
+        row_entry["報酬_1"] = f"{raw_ret_1*100:+.2f}%"
         row_entry["raw_報酬_1"] = raw_ret_1
     else:
-        row_entry["報酬_1"] = "0.00%"
+        row_entry["報酬_1"] = "+0.00%"
         row_entry["raw_報酬_1"] = 0.0
         
     for p in [5, 20, 60]:
         if not valid_tickers: continue
         sub_c = close[valid_tickers].tail(p).ffill()
         g_ret = (sub_c.div(sub_c.iloc[0]) - 1).mean(axis=1).iloc[-1]
-        row_entry[f"報酬_{p}"] = f"{g_ret*100:.2f}%"
+        row_entry[f"報酬_{p}"] = f"{g_ret*100:+.2f}%"
         row_entry[f"raw_報酬_{p}"] = g_ret  
         
         aligned_thresh_up = thresholds[p].reindex(close.index).iloc[-1]
@@ -290,15 +301,17 @@ def cycle_sort(period):
 # ==========================================
 # 3. UI 繪圖與標籤函數
 # ==========================================
-def get_status_badge(status):
+# 手機版簡化版膠囊按鈕 (高對比樣式)
+def get_status_badge_mobile(status):
     if "🔥 超額報酬" in status:
-        return '<span style="background-color:#FFD2D2; color:#D60000; padding:2px 6px; border-radius:10px; font-weight:bold; font-size:11px;">🔥 超額</span>'
+        return '<span style="background-color:#FFD2D2; color:#D60000; padding:2px 8px; border-radius:12px; font-weight:bold; font-size:12px; display:inline-block;">🔥 超額</span>'
     elif "❄️ 報酬落後" in status:
-        return '<span style="background-color:#E2F3FF; color:#0066CC; padding:2px 6px; border-radius:10px; font-weight:bold; font-size:11px;">❄️ 落後</span>'
+        return '<span style="background-color:#E2F3FF; color:#0066CC; padding:2px 8px; border-radius:12px; font-weight:bold; font-size:12px; display:inline-block;">❄️ 落後</span>'
     elif "🟢 近似大盤" in status:
-        return '<span style="background-color:#E8E8E8; color:#666666; padding:2px 6px; border-radius:10px; font-size:11px;">🟢 近似</span>'
+        return '<span style="background-color:#E8E8E8; color:#333333; padding:2px 8px; border-radius:12px; font-weight:bold; font-size:12px; display:inline-block;">🟢 近似</span>'
     return ''
 
+# 桌機版標準膠囊按鈕
 def get_status_html(status):
     if "🔥 超額報酬" in status:
         return '<div style="background-color:#FFD2D2; color:#D60000; padding:2px 8px; border-radius:12px; font-weight:bold; font-size:12px; display:inline-block; margin-top:-22px; margin-bottom:10px;">🔥 超額報酬</div>'
@@ -308,7 +321,7 @@ def get_status_html(status):
         return '<div style="background-color:#E8E8E8; color:#666666; padding:2px 8px; border-radius:12px; font-size:12px; display:inline-block; margin-top:-22px; margin-bottom:10px;">🟢 近似大盤</div>'
     return ''
 
-def draw_spark_volume(g_name, tickers_list):
+def draw_spark_volume(g_name, tickers_list, key_suffix=""):
     valid_v = [t for t in tickers_list if t in volume.columns]
     if not valid_v: return
     
@@ -332,9 +345,9 @@ def draw_spark_volume(g_name, tickers_list):
         yaxis=dict(visible=False),
         showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
     )
-    st.plotly_chart(fig, width='stretch', config={'displayModeBar': False}, key=f"vol_bar_{g_name}")
+    st.plotly_chart(fig, width='stretch', config={'displayModeBar': False}, key=f"vol_bar_{g_name}{key_suffix}")
 
-def draw_market_volume_amt():
+def draw_market_volume_amt(key_suffix=""):
     m_amt_series = twii_amount.tail(20).ffill() / 10**8
     date_labels = m_amt_series.index.strftime('%m-%d')
     hover_text = [f"{v:.1f}億" for v in m_amt_series]
@@ -355,7 +368,7 @@ def draw_market_volume_amt():
         yaxis=dict(visible=False),
         showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
     )
-    st.plotly_chart(fig, width='stretch', config={'displayModeBar': False}, key="vol_bar_TAIEX_market")
+    st.plotly_chart(fig, width='stretch', config={'displayModeBar': False}, key=f"vol_bar_TAIEX_market{key_suffix}")
 
 def draw_spark_stock_trends_svg(ticker_dict):
     tickers = list(ticker_dict.keys())
@@ -409,137 +422,165 @@ st.markdown("<br>", unsafe_allow_html=True)
 
 df_computed = get_sorted_df(df_computed_raw)
 
-# ------------------------------------------
-# 📱 模式 1：手機極致卡片版
-# ------------------------------------------
-if "手機" in view_mode:
-    taiex_ret_1 = returns_t[1].iloc[-1] * 100
-    taiex_ret_5 = returns_t[5].iloc[-1] * 100
-    taiex_ret_20 = returns_t[20].iloc[-1] * 100
-    taiex_ret_60 = returns_t[60].iloc[-1] * 100
+# ==========================================
+# 📱 1. 手機極致卡片版 (mobile-only-view)
+# ==========================================
+st.markdown("<div class='mobile-only-view'>", unsafe_allow_html=True)
 
-    taiex_html = (
-        '<div style="background:#161B22; border:1px solid #30363D; border-radius:12px; padding:14px; margin-bottom:15px;">'
-        '<div style="font-size:20px; font-weight:bold; color:#FFFFFF; margin-bottom:8px;">👑 加權指數</div>'
-        '<div style="display:flex; justify-content:space-between; font-size:13px; color:#A0A5B5; margin-bottom:10px;">'
-        f'<span>1D: <b style="color:#FFF;">{taiex_ret_1:.2f}%</b></span>'
-        f'<span>5D: <b style="color:#FFF;">{taiex_ret_5:.2f}%</b></span>'
-        f'<span>20D: <b style="color:#FFF;">{taiex_ret_20:.2f}%</b></span>'
-        f'<span>60D: <b style="color:#FFF;">{taiex_ret_60:.2f}%</b></span>'
-        '</div></div>'
-    )
-    st.markdown(taiex_html, unsafe_allow_html=True)
+# 加權指數卡片 (無皇冠、單行排列)
+taiex_ret_1 = returns_t[1].iloc[-1] * 100
+taiex_ret_5 = returns_t[5].iloc[-1] * 100
+taiex_ret_20 = returns_t[20].iloc[-1] * 100
+taiex_ret_60 = returns_t[60].iloc[-1] * 100
+
+taiex_html = (
+    '<div style="background:#161B22; border:1px solid #30363D; border-radius:12px; padding:14px; margin-bottom:15px;">'
+    '<div style="font-size:20px; font-weight:bold; color:#FFFFFF; margin-bottom:8px;">加權指數報酬</div>'
+    '<div style="font-size:13px; color:#A0A5B5; margin-bottom:8px;">'
+    f'近日: <b style="color:#FFF;">{taiex_ret_1:+.2f}%</b> &nbsp; '
+    f'近週: <b style="color:#FFF;">{taiex_ret_5:+.2f}%</b> &nbsp; '
+    f'近月: <b style="color:#FFF;">{taiex_ret_20:+.2f}%</b> &nbsp; '
+    f'近季: <b style="color:#FFF;">{taiex_ret_60:+.2f}%</b>'
+    '</div></div>'
+)
+st.markdown(taiex_html, unsafe_allow_html=True)
+
+# 循環渲染手機卡片
+if not df_computed.empty:
+    for _, row in df_computed.iterrows():
+        g_name = row['族群名稱']
+        ret_1 = row['報酬_1']
+        ret_5 = row['報酬_5']
+        ret_20 = row['報酬_20']
+        ret_60 = row['報酬_60']
+        
+        badge_5 = get_status_badge_mobile(row['狀態_5'])
+        badge_20 = get_status_badge_mobile(row['狀態_20'])
+        badge_60 = get_status_badge_mobile(row['狀態_60'])
+        
+        # 卡片頂部：標題與近日報酬 + 量能圖
+        card_top_html = (
+            '<div style="background:#161B22; border:1px solid #30363D; border-radius:12px; padding:12px; margin-bottom:8px;">'
+            '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">'
+            f'<div style="font-size:18px; font-weight:bold; color:#FFFFFF;">✦ {g_name}</div>'
+            f'<div style="font-size:13px; color:#A0A5B5;">近日 <b style="color:#FFFFFF; font-size:15px;">{ret_1}</b></div>'
+            '</div>'
+            '<div style="font-size:11px; color:#8B949E; margin-bottom:2px;">近月量能圖:</div>'
+        )
+        st.markdown(card_top_html, unsafe_allow_html=True)
+        
+        # 族群量能圖
+        draw_spark_volume(g_name, list(groups[g_name].keys()), key_suffix="_mob")
+        
+        # 下半部：近週 / 近月 / 近季 三欄佈局
+        card_bottom_html = (
+            '<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; text-align:center; margin-top:8px;">'
+            '<div style="background:#0D1117; padding:6px; border-radius:8px;">'
+            '<div style="font-size:11px; color:#8B949E;">近週</div>'
+            f'<div style="font-size:14px; font-weight:bold; color:#FFF; margin:2px 0;">{ret_5}</div>'
+            f'{badge_5}'
+            '</div>'
+            '<div style="background:#0D1117; padding:6px; border-radius:8px;">'
+            '<div style="font-size:11px; color:#8B949E;">近月</div>'
+            f'<div style="font-size:14px; font-weight:bold; color:#FFF; margin:2px 0;">{ret_20}</div>'
+            f'{badge_20}'
+            '</div>'
+            '<div style="background:#0D1117; padding:6px; border-radius:8px;">'
+            '<div style="font-size:11px; color:#8B949E;">近季</div>'
+            f'<div style="font-size:14px; font-weight:bold; color:#FFF; margin:2px 0;">{ret_60}</div>'
+            f'{badge_60}'
+            '</div>'
+            '</div>'
+        )
+        st.markdown(card_bottom_html, unsafe_allow_html=True)
+        
+        # 按鈕：點擊標題直接開關成分股走勢
+        if st.button(f"點擊展開/收合 {g_name} 成分股走勢", key=f"mob_btn_{g_name}"):
+            if st.session_state['expanded_group'] == g_name:
+                st.session_state['expanded_group'] = None
+            else:
+                st.session_state['expanded_group'] = g_name
+                
+        if st.session_state['expanded_group'] == g_name:
+            st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+            draw_spark_stock_trends_svg(groups[g_name])
+            
+        st.markdown("<div style='margin-bottom:15px;'></div>", unsafe_allow_html=True)
+
+st.markdown("</div>", unsafe_allow_html=True)
+
+# ==========================================
+# 💻 2. 桌機/平板大表格版 (desktop-only-view)
+# ==========================================
+st.markdown("<div class='desktop-only-view'>", unsafe_allow_html=True)
+
+def render_sort_header(col, label, period):
+    with col:
+        c_label, c_btn = st.columns([3, 1], gap="small")
+        with c_label:
+            st.markdown(f"<span style='font-size: 1.5rem; white-space: nowrap;'>{label}</span>", unsafe_allow_html=True)
+        with c_btn:
+            active = st.session_state.get("sort_period") == period
+            cur_dir = st.session_state.get("sort_dir")
+            symbol = "△\n▼" if (active and cur_dir == "desc") else ("▲\n▽" if (active and cur_dir == "asc") else "△\n▽")
+            if st.button(symbol, key=f"sortbtn_{period}"):
+                cycle_sort(period)
+                st.rerun()
+
+col_h_space, col_h_name, col_h_d, col_h_w, col_h_m, col_h_q, col_h_v = st.columns([0.01, 1.75, 1.2, 1.2, 1.2, 1.2, 1.4])
+with col_h_space: st.write("")
+with col_h_name: st.markdown("<span style='font-size: 1.5rem;'>族群名稱</span>", unsafe_allow_html=True)
+render_sort_header(col_h_d, "近日報酬", "1")
+render_sort_header(col_h_w, "近週報酬", "5")
+render_sort_header(col_h_m, "近月報酬", "20")
+render_sort_header(col_h_q, "近季報酬", "60")
+with col_h_v: st.markdown("<span style='font-size: 1.5rem;'>近月量能/走勢</span>", unsafe_allow_html=True)
+st.markdown("<hr style='margin: 5px 0 15px 0; border-top: 2px solid #ccc;'>", unsafe_allow_html=True)
+
+with st.container(height=550):
+    col_n, col_d, col_w, col_m, col_q, col_v = st.columns([1.8, 1.2, 1.2, 1.2, 1.2, 1.4])
+    with col_n: st.markdown("<h3 style='margin-left: 5px; font-weight: bold; font-size: 27px;'>加權指數</h3>", unsafe_allow_html=True)
+    with col_d: st.metric(label="1D", label_visibility="collapsed", value=f"{returns_t[1].iloc[-1]*100:+.2f}%")
+    with col_w: st.metric(label="5D", label_visibility="collapsed", value=f"{returns_t[5].iloc[-1]*100:+.2f}%")
+    with col_m: st.metric(label="20D", label_visibility="collapsed", value=f"{returns_t[20].iloc[-1]*100:+.2f}%")
+    with col_q: st.metric(label="60D", label_visibility="collapsed", value=f"{returns_t[60].iloc[-1]*100:+.2f}%")
+    with col_v: 
+        draw_market_volume_amt(key_suffix="_desk")
+        
+    st.markdown("<hr style='margin: 15px 0; border-top: 2px solid #555;'>", unsafe_allow_html=True)
 
     if not df_computed.empty:
         for _, row in df_computed.iterrows():
             g_name = row['族群名稱']
-            ret_1 = row['報酬_1']
-            ret_5 = row['報酬_5']
-            ret_20 = row['報酬_20']
-            ret_60 = row['報酬_60']
+            col_n, col_d, col_w, col_m, col_q, col_v = st.columns([1.8, 1.2, 1.2, 1.2, 1.2, 1.4])
             
-            badge_5 = get_status_badge(row['狀態_5'])
-            badge_20 = get_status_badge(row['狀態_20'])
-            badge_60 = get_status_badge(row['狀態_60'])
-            
-            card_html = (
-                '<div style="background:#161B22; border:1px solid #30363D; border-radius:12px; padding:12px; margin-bottom:12px;">'
-                '<div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #21262D; padding-bottom:8px; margin-bottom:10px;">'
-                f'<div style="font-size:19px; font-weight:bold; color:#FFFFFF;">✦ {g_name}</div>'
-                f'<div style="font-size:13px; color:#A0A5B5;">1D 報酬 <b style="color:#FFFFFF; font-size:15px;">{ret_1}</b></div>'
-                '</div>'
-                '<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; text-align:center;">'
-                '<div style="background:#0D1117; padding:6px; border-radius:8px;">'
-                '<div style="font-size:11px; color:#8B949E;">5D 報酬</div>'
-                f'<div style="font-size:14px; font-weight:bold; color:#FFF; margin:2px 0;">{ret_5}</div>'
-                f'{badge_5}'
-                '</div>'
-                '<div style="background:#0D1117; padding:6px; border-radius:8px;">'
-                '<div style="font-size:11px; color:#8B949E;">近月 20D</div>'
-                f'<div style="font-size:14px; font-weight:bold; color:#FFF; margin:2px 0;">{ret_20}</div>'
-                f'{badge_20}'
-                '</div>'
-                '<div style="background:#0D1117; padding:6px; border-radius:8px;">'
-                '<div style="font-size:11px; color:#8B949E;">近季 60D</div>'
-                f'<div style="font-size:14px; font-weight:bold; color:#FFF; margin:2px 0;">{ret_60}</div>'
-                f'{badge_60}'
-                '</div>'
-                '</div></div>'
-            )
-            st.markdown(card_html, unsafe_allow_html=True)
-            
-            with st.expander(f"🔽 展開 {g_name} 成分股走勢"):
-                draw_spark_stock_trends_svg(groups[g_name])
-
-# ------------------------------------------
-# 💻 模式 2：桌機/平板大表格版
-# ------------------------------------------
-else:
-    def render_sort_header(col, label, period):
-        with col:
-            c_label, c_btn = st.columns([3, 1], gap="small")
-            with c_label:
-                st.markdown(f"<span style='font-size: 1.5rem; white-space: nowrap;'>{label}</span>", unsafe_allow_html=True)
-            with c_btn:
-                active = st.session_state.get("sort_period") == period
-                cur_dir = st.session_state.get("sort_dir")
-                symbol = "△\n▼" if (active and cur_dir == "desc") else ("▲\n▽" if (active and cur_dir == "asc") else "△\n▽")
-                if st.button(symbol, key=f"sortbtn_{period}"):
-                    cycle_sort(period)
-                    st.rerun()
-
-    col_h_space, col_h_name, col_h_d, col_h_w, col_h_m, col_h_q, col_h_v = st.columns([0.01, 1.75, 1.2, 1.2, 1.2, 1.2, 1.4])
-    with col_h_space: st.write("")
-    with col_h_name: st.markdown("<span style='font-size: 1.5rem;'>族群名稱</span>", unsafe_allow_html=True)
-    render_sort_header(col_h_d, "近日報酬", "1")
-    render_sort_header(col_h_w, "近週報酬", "5")
-    render_sort_header(col_h_m, "近月報酬", "20")
-    render_sort_header(col_h_q, "近季報酬", "60")
-    with col_h_v: st.markdown("<span style='font-size: 1.5rem;'>近月量能/走勢</span>", unsafe_allow_html=True)
-    st.markdown("<hr style='margin: 5px 0 15px 0; border-top: 2px solid #ccc;'>", unsafe_allow_html=True)
-
-    with st.container(height=550):
-        col_n, col_d, col_w, col_m, col_q, col_v = st.columns([1.8, 1.2, 1.2, 1.2, 1.2, 1.4])
-        with col_n: st.markdown("<h3 style='margin-left: 5px; font-weight: bold; font-size: 27px;'>加權指數</h3>", unsafe_allow_html=True)
-        with col_d: st.metric(label="1D", label_visibility="collapsed", value=f"{returns_t[1].iloc[-1]*100:.2f}%")
-        with col_w: st.metric(label="5D", label_visibility="collapsed", value=f"{returns_t[5].iloc[-1]*100:.2f}%")
-        with col_m: st.metric(label="20D", label_visibility="collapsed", value=f"{returns_t[20].iloc[-1]*100:.2f}%")
-        with col_q: st.metric(label="60D", label_visibility="collapsed", value=f"{returns_t[60].iloc[-1]*100:.2f}%")
-        with col_v: 
-            draw_market_volume_amt()
-            
-        st.markdown("<hr style='margin: 15px 0; border-top: 2px solid #555;'>", unsafe_allow_html=True)
-
-        if not df_computed.empty:
-            for _, row in df_computed.iterrows():
-                g_name = row['族群名稱']
-                col_n, col_d, col_w, col_m, col_q, col_v = st.columns([1.8, 1.2, 1.2, 1.2, 1.2, 1.4])
+            with col_n:
+                if st.button(g_name, key=f"desk_btn_{g_name}"):
+                    if st.session_state['expanded_group'] == g_name:
+                        st.session_state['expanded_group'] = None
+                    else:
+                        st.session_state['expanded_group'] = g_name
+                    
+            with col_d: st.metric(label="1D", label_visibility="collapsed", value=row['報酬_1'])
+            with col_w:
+                st.metric(label="5D", label_visibility="collapsed", value=row['報酬_5'])
+                st.markdown(get_status_html(row['狀態_5']), unsafe_allow_html=True)
+            with col_m:
+                st.metric(label="20D", label_visibility="collapsed", value=row['報酬_20'])
+                st.markdown(get_status_html(row['狀態_20']), unsafe_allow_html=True)
+            with col_q:
+                st.metric(label="60D", label_visibility="collapsed", value=row['報酬_60'])
+                st.markdown(get_status_html(row['狀態_60']), unsafe_allow_html=True)
+            with col_v:
+                draw_spark_volume(g_name, list(groups[g_name].keys()), key_suffix="_desk")
                 
-                with col_n:
-                    if st.button(g_name, key=f"btn_{g_name}"):
-                        if st.session_state['expanded_group'] == g_name:
-                            st.session_state['expanded_group'] = None
-                        else:
-                            st.session_state['expanded_group'] = g_name
-                        
-                with col_d: st.metric(label="1D", label_visibility="collapsed", value=row['報酬_1'])
-                with col_w:
-                    st.metric(label="5D", label_visibility="collapsed", value=row['報酬_5'])
-                    st.markdown(get_status_html(row['狀態_5']), unsafe_allow_html=True)
-                with col_m:
-                    st.metric(label="20D", label_visibility="collapsed", value=row['報酬_20'])
-                    st.markdown(get_status_html(row['狀態_20']), unsafe_allow_html=True)
-                with col_q:
-                    st.metric(label="60D", label_visibility="collapsed", value=row['報酬_60'])
-                    st.markdown(get_status_html(row['狀態_60']), unsafe_allow_html=True)
-                with col_v:
-                    draw_spark_volume(g_name, list(groups[g_name].keys()))
-                    
-                if st.session_state['expanded_group'] == g_name:
-                    st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
-                    draw_spark_stock_trends_svg(groups[g_name])
-                    
-                st.markdown("<hr style='margin: 12px 0 15px 0; border-top: 1px solid #333;'>", unsafe_allow_html=True)
+            if st.session_state['expanded_group'] == g_name:
+                st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+                draw_spark_stock_trends_svg(groups[g_name])
+                
+            st.markdown("<hr style='margin: 12px 0 15px 0; border-top: 1px solid #333;'>", unsafe_allow_html=True)
+
+st.markdown("</div>", unsafe_allow_html=True)
 
 # ==========================================
 # 5. 下半部網頁呈現：大盤歷史對照圖
