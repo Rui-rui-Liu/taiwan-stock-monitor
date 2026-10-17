@@ -114,7 +114,7 @@ close, volume, twii, market_value, twii_amount = load_data()
 # 1. 側邊欄設定
 # ==========================================
 st.sidebar.header("看盤與監控設定")
-view_mode = st.sidebar.radio("版面模式", ["📱 手機極致卡片", "💻 桌機/平板橫向大表"], index=0)
+view_mode = st.sidebar.radio("版面模式", ["📱 手機", "💻 電腦"], index=0)
 st.sidebar.markdown("---")
 sigma_5 = st.sidebar.slider("近週 σ 倍數", min_value=0.0, max_value=3.0, value=1.0, step=0.1)
 sigma_20 = st.sidebar.slider("近月 σ 倍數", min_value=0.0, max_value=3.0, value=1.0, step=0.1)
@@ -412,7 +412,7 @@ st.markdown("<br>", unsafe_allow_html=True)
 df_computed = get_sorted_df(df_computed_raw)
 
 # ==========================================
-# 📱 模式 1：手機極致卡片版
+# 📱 模式 1：手機版
 # ==========================================
 if "手機" in view_mode:
     taiex_ret_1 = returns_t[1].iloc[-1] * 100
