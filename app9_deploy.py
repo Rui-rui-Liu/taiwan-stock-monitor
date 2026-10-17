@@ -9,7 +9,7 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="台股族群漲跌幅", layout="wide")
 
 # ==========================================
-# 【全域 UI 與 RWD 自適應 CSS 注入】
+# 【全域 UI 強制修正】：經典黑底風格 CSS 注入
 # ==========================================
 st.markdown("""
 <style>
@@ -21,21 +21,21 @@ st.markdown("""
     h1, h2, h3, h4, h5, h6, p, span, label {
         color: #FFFFFF !important;
     }
-    /* 極致緊縮大標題的上方間距，消滅大空白 */
+    /* 極致緊縮大標題的上方間距 */
     h1 {
         padding-top: 0px !important;
-        margin-top: -30px !important;  /* 負邊距上提標題 */
+        margin-top: -30px !important;
         padding-bottom: 0px !important;
         margin-bottom: 0px !important;
     }
-    /* 讓 st.columns 渲染出的每一行區塊底部強制留白 */
+    /* 讓 st.columns 渲染出的每一行區塊底部留白 */
     [data-testid="stHorizontalBlock"] {
         margin-bottom: 8px !important;
     }
     .element-container {
         margin-bottom: 0px !important;
     }
-    /* 終極外觀魔法：把按鈕偽裝成普通純白文字，字體加大與加權指數對齊 */
+    /* 按鈕偽裝成純白大字 */
     div.stButton > button, 
     div.stButton > button p, 
     div.stButton > button span {
@@ -43,7 +43,7 @@ st.markdown("""
         color: #FFFFFF !important;
         border: none !important;
         padding: 0px !important;
-        font-size: 27px !important;
+        font-size: 24px !important;
         font-weight: bold !important;
         text-align: left !important;
         box-shadow: none !important;
@@ -57,7 +57,6 @@ st.markdown("""
         background-color: transparent !important;
         border: none !important;
     }
-    /* 點完不要持續亮橘色，focus 時維持純白，只有 hover 會亮 */
     div.stButton > button:focus,
     div.stButton > button:focus p,
     div.stButton > button:focus span {
@@ -66,7 +65,7 @@ st.markdown("""
         border: none !important;
         box-shadow: none !important;
     }
-    /* 排序三角形按鈕：改用小尺寸、貼近標題 */
+    /* 排序按鈕樣式 */
     [class*="st-key-sortbtn_"] div.stButton > button,
     [class*="st-key-sortbtn_"] div.stButton > button p,
     [class*="st-key-sortbtn_"] div.stButton > button span {
@@ -87,21 +86,20 @@ st.markdown("""
         color: #FF8500 !important;
     }
 
-    /* ==========================================
-       📱 手機極致卡片式 (RWD Media Query) 媒體查詢
-       ========================================== */
+    /* 📱 強制在手機窄螢幕（<=768px）下不拆分欄位，保持橫向對齊 */
     @media (max-width: 768px) {
-        /* 隱藏桌機版的標頭 */
+        [data-testid="stHorizontalBlock"] {
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            gap: 4px !important;
+        }
+        [data-testid="column"] {
+            width: auto !important;
+            min-width: 0 !important;
+            flex: 1 1 0 !important;
+        }
         .desktop-header-row {
             display: none !important;
-        }
-        /* 將每一列重構為獨立精美卡片 */
-        .group-card-container {
-            background-color: #161B22;
-            border: 1px solid #30363D;
-            border-radius: 10px;
-            padding: 12px;
-            margin-bottom: 12px;
         }
     }
 </style>
@@ -130,7 +128,9 @@ close, volume, twii, market_value, twii_amount = load_data()
 # ==========================================
 # 1. 側邊欄設定
 # ==========================================
-st.sidebar.header("監控參數設定 (σ)")
+st.sidebar.header("看盤與監控設定")
+view_mode = st.sidebar.radio("版面模式", ["💻 桌機/平板橫向大表", "📱 手機極致卡片"], index=0)
+st.sidebar.markdown("---")
 sigma_5 = st.sidebar.slider("近週 σ 倍數", min_value=0.0, max_value=3.0, value=1.0, step=0.1)
 sigma_20 = st.sidebar.slider("近月 σ 倍數", min_value=0.0, max_value=3.0, value=1.0, step=0.1)
 sigma_60 = st.sidebar.slider("近季 σ 倍數", min_value=0.0, max_value=3.0, value=1.0, step=0.1)
@@ -307,6 +307,15 @@ def cycle_sort(period):
 # ==========================================
 # 3. UI 繪圖與標籤函數
 # ==========================================
+def get_status_badge(status):
+    if "🔥 超額報酬" in status:
+        return '<span style="background-color:#FFD2D2; color:#D60000; padding:2px 6px; border-radius:10px; font-weight:bold; font-size:11px;">🔥 超額</span>'
+    elif "❄️ 報酬落後" in status:
+        return '<span style="background-color:#E2F3FF; color:#0066CC; padding:2px 6px; border-radius:10px; font-weight:bold; font-size:11px;">❄️ 落後</span>'
+    elif "🟢 近似大盤" in status:
+        return '<span style="background-color:#E8E8E8; color:#666666; padding:2px 6px; border-radius:10px; font-size:11px;">🟢 近似</span>'
+    return ''
+
 def get_status_html(status):
     if "🔥 超額報酬" in status:
         return '<div style="background-color:#FFD2D2; color:#D60000; padding:2px 8px; border-radius:12px; font-weight:bold; font-size:12px; display:inline-block; margin-top:-22px; margin-bottom:10px;">🔥 超額報酬</div>'
@@ -316,13 +325,11 @@ def get_status_html(status):
         return '<div style="background-color:#E8E8E8; color:#666666; padding:2px 8px; border-radius:12px; font-size:12px; display:inline-block; margin-top:-22px; margin-bottom:10px;">🟢 近似大盤</div>'
     return ''
 
-# 個股成交量圖
 def draw_spark_volume(g_name, tickers_list):
     valid_v = [t for t in tickers_list if t in volume.columns]
     if not valid_v: return
     
     g_vol_series = (volume[valid_v] / 1000).tail(20).ffill().sum(axis=1)
-    
     date_labels = g_vol_series.index.strftime('%m-%d')
     hover_text = [f"{v:.0f}張" for v in g_vol_series]
     category_x = [f"D{i}" for i in range(1, 21)]
@@ -344,10 +351,8 @@ def draw_spark_volume(g_name, tickers_list):
     )
     st.plotly_chart(fig, width='stretch', config={'displayModeBar': False}, key=f"vol_bar_{g_name}")
 
-# 大盤成交金額圖
 def draw_market_volume_amt():
     m_amt_series = twii_amount.tail(20).ffill() / 10**8
-    
     date_labels = m_amt_series.index.strftime('%m-%d')
     hover_text = [f"{v:.1f}億" for v in m_amt_series]
     category_x = [f"D{i}" for i in range(1, 21)]
@@ -369,7 +374,6 @@ def draw_market_volume_amt():
     )
     st.plotly_chart(fig, width='stretch', config={'displayModeBar': False}, key="vol_bar_TAIEX_market")
 
-# 純 SVG 高速個股走勢引擎 (黑底去框 1行5檔 + 市值排序)
 def draw_spark_stock_trends_svg(ticker_dict):
     tickers = list(ticker_dict.keys())
     valid_t = [t for t in tickers if t in close.columns]
@@ -415,131 +419,37 @@ def draw_spark_stock_trends_svg(ticker_dict):
             st.markdown(svg_html, unsafe_allow_html=True)
 
 # ==========================================
-# 4. 主要主頁表格渲染 (支援 RWD 自適應卡片化)
+# 4. 主要主頁表格渲染
 # ==========================================
 st.title("台股族群漲跌幅")
 st.markdown("<br>", unsafe_allow_html=True)
 
-def render_sort_header(col, label, period):
-    with col:
-        c_label, c_btn = st.columns([3, 1], gap="small")
-        with c_label:
-            st.markdown(f"<span style='font-size: 1.5rem; white-space: nowrap;'>{label}</span>", unsafe_allow_html=True)
-        with c_btn:
-            active = st.session_state.get("sort_period") == period
-            cur_dir = st.session_state.get("sort_dir")
-            if active and cur_dir == "desc":
-                symbol = "△\n▼"
-            elif active and cur_dir == "asc":
-                symbol = "▲\n▽"
-            else:
-                symbol = "△\n▽"
-            if st.button(symbol, key=f"sortbtn_{period}"):
-                cycle_sort(period)
-                st.rerun()
-
-# 標頭加入桌機專用類別 (desktop-header-row)
-st.markdown("<div class='desktop-header-row'>", unsafe_allow_html=True)
-col_h_space, col_h_name, col_h_d, col_h_w, col_h_m, col_h_q, col_h_v = st.columns([0.01, 1.75, 1.2, 1.2, 1.2, 1.2, 1.4])
-with col_h_space: st.write("")
-with col_h_name: st.markdown("<span style='font-size: 1.5rem;'>族群名稱</span>", unsafe_allow_html=True)
-render_sort_header(col_h_d, "近日報酬", "1")
-render_sort_header(col_h_w, "近週報酬", "5")
-render_sort_header(col_h_m, "近月報酬", "20")
-render_sort_header(col_h_q, "近季報酬", "60")
-with col_h_v: st.markdown("<span style='font-size: 1.5rem;'>近月量能/走勢</span>", unsafe_allow_html=True)
-st.markdown("<hr style='margin: 5px 0 15px 0; border-top: 2px solid #ccc;'>", unsafe_allow_html=True)
-st.markdown("</div>", unsafe_allow_html=True)
-
 df_computed = get_sorted_df(df_computed_raw)
 
-with st.container(height=550):
-    # 大盤置頂
-    col_n, col_d, col_w, col_m, col_q, col_v = st.columns([1.8, 1.2, 1.2, 1.2, 1.2, 1.4])
-    with col_n: st.markdown("<h3 style='margin-left: 5px; font-weight: bold; font-size: 27px;'>加權指數</h3>", unsafe_allow_html=True)
-    with col_d: st.metric(label="1D", label_visibility="collapsed", value=f"{returns_t[1].iloc[-1]*100:.2f}%")
-    with col_w: st.metric(label="5D", label_visibility="collapsed", value=f"{returns_t[5].iloc[-1]*100:.2f}%")
-    with col_m: st.metric(label="20D", label_visibility="collapsed", value=f"{returns_t[20].iloc[-1]*100:.2f}%")
-    with col_q: st.metric(label="60D", label_visibility="collapsed", value=f"{returns_t[60].iloc[-1]*100:.2f}%")
-    with col_v: 
-        draw_market_volume_amt()
-        
-    st.markdown("<hr style='margin: 15px 0; border-top: 2px solid #555;'>", unsafe_allow_html=True)
+# ------------------------------------------
+# 📱 模式 1：手機極致卡片版 (完全照你的設計)
+# ------------------------------------------
+if "手機" in view_mode:
+    # 加權指數卡片
+    st.markdown(f"""
+    <div style="background:#161B22; border:1px solid #30363D; border-radius:12px; padding:14px; margin-bottom:15px;">
+        <div style="font-size:20px; font-weight:bold; color:#FFFFFF; margin-bottom:8px;">👑 加權指數</div>
+        <div style="display:flex; justify-content:space-between; font-size:13px; color:#A0A5B5; margin-bottom:10px;">
+            <span>1D: <b style="color:#FFF;">{returns_t[1].iloc[-1]*100:.2f}%</b></span>
+            <span>5D: <b style="color:#FFF;">{returns_t[5].iloc[-1]*100:.2f}%</b></span>
+            <span>20D: <b style="color:#FFF;">{returns_t[20].iloc[-1]*100:.2f}%</b></span>
+            <span>60D: <b style="color:#FFF;">{returns_t[60].iloc[-1]*100:.2f}%</b></span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    # 循環渲染所有族群
     if not df_computed.empty:
         for _, row in df_computed.iterrows():
             g_name = row['族群名稱']
             
-            # 用 group-card-container 包裹，提供手機端獨立黑底卡片外框
-            st.markdown("<div class='group-card-container'>", unsafe_allow_html=True)
-            
-            col_n, col_d, col_w, col_m, col_q, col_v = st.columns([1.8, 1.2, 1.2, 1.2, 1.2, 1.4])
-            
-            with col_n:
-                # 獨佔式展開按鈕
-                if st.button(g_name, key=f"btn_{g_name}"):
-                    if st.session_state['expanded_group'] == g_name:
-                        st.session_state['expanded_group'] = None
-                    else:
-                        st.session_state['expanded_group'] = g_name
-                    
-            with col_d: 
-                st.metric(label="1D", label_visibility="collapsed", value=row['報酬_1'])
-            with col_w:
-                st.metric(label="5D", label_visibility="collapsed", value=row['報酬_5'])
-                st.markdown(get_status_html(row['狀態_5']), unsafe_allow_html=True)
-            with col_m:
-                st.metric(label="20D", label_visibility="collapsed", value=row['報酬_20'])
-                st.markdown(get_status_html(row['狀態_20']), unsafe_allow_html=True)
-            with col_q:
-                st.metric(label="60D", label_visibility="collapsed", value=row['報酬_60'])
-                st.markdown(get_status_html(row['狀態_60']), unsafe_allow_html=True)
-            with col_v:
-                draw_spark_volume(g_name, list(groups[g_name].keys()))
-                
-            if st.session_state['expanded_group'] == g_name:
-                st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
-                draw_spark_stock_trends_svg(groups[g_name])
-                
-            st.markdown("</div>", unsafe_allow_html=True)
-            st.markdown("<hr style='margin: 8px 0 12px 0; border-top: 1px solid #333;'>", unsafe_allow_html=True)
-
-# ==========================================
-# 5. 下半部網頁呈現：大盤歷史對照圖
-# ==========================================
-st.markdown("<br>", unsafe_allow_html=True)
-st.subheader("族群報酬 vs. 加權報酬指數")
-
-col_sel, col_time = st.columns([2, 1])
-with col_sel:
-    chosen_g_name = st.selectbox("選擇對照族群", list(groups.keys()), index=0)
-with col_time:
-    chart_window = st.selectbox("圖表歷史區間", ["週", "月", "季", "半年", "一年", "三年"], index=4)
-
-window_map = {"週": 5, "月": 20, "季": 60, "半年": 120, "一年": 252, "三年": 756}
-w_days = window_map[chart_window]
-
-g_tickers = list(groups[chosen_g_name].keys())
-valid_plot_tickers = [t for t in g_tickers if t in close.columns]
-
-if valid_plot_tickers:
-    sub_close = close[valid_plot_tickers].tail(w_days).ffill()
-    sub_twii = twii.tail(w_days)
-    
-    group_each_cum = sub_close.div(sub_close.iloc[0]) - 1
-    twii_cum_return = (sub_twii / sub_twii.iloc[0]) - 1
-    group_cum_return = group_each_cum.mean(axis=1)
-
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=twii_cum_return.index, y=twii_cum_return * 100, name='加權指數累積報酬 (%)', line=dict(color='#888888', width=2)))
-    fig.add_trace(go.Scatter(x=group_cum_return.index, y=group_cum_return * 100, name=f'{chosen_g_name} 族群累積報酬 (%)', line=dict(color='#FF8500', width=3)))
-    
-    fig.update_layout(
-        xaxis_title="日期", yaxis_title="累積報酬率 (%)", hovermode="x unified",
-        paper_bgcolor='#0E1117', plot_bgcolor='#0E1117',
-        margin=dict(l=20, r=20, t=20, b=20), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    )
-    fig.update_xaxes(showgrid=True, gridcolor='#22252D')
-    fig.update_yaxes(showgrid=True, gridcolor='#22252D')
-    st.plotly_chart(fig, width='stretch')
+            # 手機卡片 HTML：右上角放 1D，下半部 3 欄放 5D/20D/60D + 標籤
+            card_html = f"""
+            <div style="background:#161B22; border:1px solid #30363D; border-radius:12px; padding:12px; margin-bottom:12px;">
+                <!-- 上半部：左上族群名，右上 1D 報酬 -->
+                <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #21262D; padding-bottom:8px; margin-bottom:10px;">
+                    <div style="font-size:19px; font-weight:
