@@ -62,19 +62,39 @@ st.markdown("""
     div.stButton > button:focus p,
     div.stButton > button:focus span {
         background-color: transparent !important;
-        color: #FFFFFF !important; 
+        color: #FFFFFF !important;
         border: none !important;
         box-shadow: none !important;
+    }
+    /* 排序三角形按鈕：改用小尺寸、貼近標題，覆蓋掉上面的大字純白按鈕樣式 */
+    [class*="st-key-sortbtn_"] div.stButton > button,
+    [class*="st-key-sortbtn_"] div.stButton > button p,
+    [class*="st-key-sortbtn_"] div.stButton > button span {
+        font-size: 12px !important;
+        line-height: 1.1 !important;
+        font-weight: normal !important;
+        text-align: left !important;
+        white-space: pre-line !important;
+        padding: 0px !important;
+        margin: 0px !important;
+        min-height: 0px !important;
+        height: auto !important;
+        color: #A0A5B5 !important;
+    }
+    [class*="st-key-sortbtn_"] div.stButton > button:hover,
+    [class*="st-key-sortbtn_"] div.stButton > button:hover p,
+    [class*="st-key-sortbtn_"] div.stButton > button:hover span {
+        color: #FF8500 !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 0. 記憶體快取
+# 0. 記憶體快取 (支援本機與雲端 Secrets 部署)
 # ==========================================
 @st.cache_data
 def load_data():
-    # 核心修正：優先讀取雲端隱密設定（Secrets），若沒有（例如在本機跑）則讀取本機憑證
+    # 優先讀取雲端隱密設定（Secrets），若沒有（例如在本機執行）則讀取本機憑證
     api_token = st.secrets.get("finlab", {}).get("api_token", None)
     if api_token:
         finlab.login(api_token)
@@ -94,30 +114,26 @@ close, volume, twii, market_value, twii_amount = load_data()
 # 1. 側邊欄設定
 # ==========================================
 st.sidebar.header("監控參數設定 (σ)")
-sigma_5 = st.sidebar.slider("近週 σ 倍數", min_value=0.0, max_value=4.0, value=2.0, step=0.1)
-sigma_20 = st.sidebar.slider("近月 σ 倍數", min_value=0.0, max_value=4.0, value=2.0, step=0.1)
-sigma_60 = st.sidebar.slider("近季 σ 倍數", min_value=0.0, max_value=4.0, value=2.0, step=0.1)
+sigma_5 = st.sidebar.slider("近週 σ 倍數", min_value=0.0, max_value=3.0, value=1.0, step=0.1)
+sigma_20 = st.sidebar.slider("近月 σ 倍數", min_value=0.0, max_value=3.0, value=1.0, step=0.1)
+sigma_60 = st.sidebar.slider("近季 σ 倍數", min_value=0.0, max_value=3.0, value=1.0, step=0.1)
 
+# ==========================================
 # 族群結構名單
 # ==========================================
-# 【完整擴充版】
-# ==========================================
 groups = {
-    '光通訊': {'3081': '聯亞', '6789': '采鈺', '6442': '光聖', '6526': '達發', '3450': '聯鈞', '3163': '波若威', '4979': '華星光', '2455': '全新', '6451': '訊芯-KY', '4991': '環宇-KY', '3105': '穩懋'},
-    '先進封裝-FOPLP': {'3711': '日月光投控', '6239': '力成', '3481': '群創', '3663': '鑫科', '3580': '友威科'},
-    '封裝/測試': {'3711': '日月光投控', '2449': '京元電', '6239': '力成', '6257': '矽格', '3264': '欣銓', '2441': '超豐', '8150': '南茂'},
-    'CoPoS設備': {'3131': '弘塑', '3583': '辛耘', '6187': '萬潤', '2680': '家登', '2467': '志聖', '6640': '均華', '6664': '群翊', '7734': '印能科技', '5443': '均豪', '3535': '晶彩科', '6789': '采鈺'},
-    '自動測試設備(ATE)': {'3030': '德律', '7769': '鴻勁', '2360': '致茂'},
-    'PCB設備/耗材': {'3167': '大量', '7795': '長廣', '8021': '尖點'},
+    'FOPLP': {'3711': '日月光投控', '6239': '力成', '3481': '群創', '3663': '鑫科', '3580': '友威科'},
+    '封裝': {'3711': '日月光投控', '6239': '力成', '2441': '超豐', '8150': '南茂'},
+    '測試': {'2449': '京元電', '6257': '矽格', '3264': '欣銓', '3374': '精材'},
     '高階PCB板': {'2368': '金像電', '3044': '健鼎', '2313': '華通', '5439': '高技', '3715': '定穎投控', '6191': '精成科'},
     '晶圓代工': {'2330': '台積電', '2303': '聯電', '5347': '世界', '6770': '力積電'},
     'ASIC': {'2454': '聯發科', '3443': '創意', '3661': '世芯-KY', '3035': '智原'},
     '伺服器電力設備': {'2308': '台達電', '2301': '光寶科', '1504': '東元', '6282': '康舒', '6412': '群電'},
-    'ODM/OEM': {'2317': '鴻海', '2382': '廣達', '6669': '緯穎', '3231': '緯創', '2356': '英業達', '4938': '和碩', '2324': '仁寶', '3706': '神達', '2357': '華碩'},
+    '伺服器ODM/OEM': {'2317': '鴻海', '2382': '廣達', '6669': '緯穎', '3231': '緯創', '2356': '英業達', '2376': '技嘉', '2357': '華碩', '4938': '和碩', '2324': '仁寶'},
     'CCL/銅箔': {'2383': '台光電', '6274': '台燿', '6213': '聯茂', '1303': '南亞', '8358': '金居'},
     '被動元件': {'2327': '國巨', '2492': '華新科', '3026': '禾伸堂', '2472': '立隆電', '6173': '信昌電'},
     '被動元件-通路商': {'3090': '日電貿', '8043': '蜜望實'},
-    '金控': {'2881': '富邦金', '2891': '中信金', '2882': '國泰金', '2885': '元大金', '2887': '台新金', '2886': '兆豐金', '2890': '永豐金', '2884': '玉山金', '2883': '凱基金', '2880': '華南金', '2892': '第一金', '5880': '合庫金'},
+    '金控': {'2881': '富邦金', '2891': '中信金', '2882': '國泰金', '2885': '元大金', '2887': '台新新光金', '2886': '兆豐金', '2890': '永豐金', '2884': '玉山金', '2883': '凱基金', '2880': '華南金', '2892': '第一金', '5880': '合庫金'},
     '銀行': {'2801': '彰銀', '5876': '上海商銀', '2834': '臺企銀', '2812': '台中銀', '2838': '聯邦銀', '2845': '遠東銀'},
     '玻璃纖維布': {'1303': '南亞', '1802': '台玻', '1815': '富喬', '5475': '德宏', '5340': '建榮'},
     '塑化': {'1303': '南亞', '6505': '台塑化', '1326': '台化', '1301': '台塑', '1314': '中石化'},
@@ -125,13 +141,15 @@ groups = {
     '資料中心交換器': {'2345': '智邦', '6285': '啓碁', '3380': '明泰'},
     'DRAM/NOR flash': {'2408': '南亞科', '2344': '華邦電', '2337': '旺宏'},
     '電信': {'2412': '中華電', '3045': '台灣大', '4904': '遠傳'},
-    '散熱': {'2308': '台達電', '3017': '奇鋐', '3653': '健策', '6805': '富世達', '3324': '雙鴻', '2354': '鴻準', '2486': '一詮', '6831': '邁科'},
+    '伺服器散熱': {'3017': '奇鋐', '3653': '健策', '6805': '富世達', '3324': '雙鴻', '8996': '高力'},
+    '散熱-多元/傳統應用': {'2308': '台達電', '2354': '鴻準', '2486': '一詮', '6831': '邁科'},
     '伺服器滑軌': {'2059': '川湖', '6584': '南俊國際', '6805': '富世達'},
     '探針卡/植針機': {'6223': '旺矽', '6515': '穎崴', '6510': '精測', '6683': '雍智科技', '6217': '中探針', '7828': '創新服務'},
     '新藥研發': {'6446': '藥華藥', '6919': '康霈', '1795': '美時', '4743': '合一', '4147': '中裕', '6535': '順藥'},
     '面板': {'3481': '群創', '2409': '友達', '6116': '彩晶'},
-    '記憶體IC/IP': {'8299': '群聯', '3006': '晶豪科', '6485': '點序', '5351': '鈺創', '6531': '愛普'},
-    '消費性3C': {'2357': '華碩', '2353': '宏碁', '2376': '技嘉', '2377': '微星', '2385': '群光'},
+    '記憶體IC/IP': {'8299': '群聯', '3006': '晶豪科', '6485': '點序', '5351': '鈺創', '6531': '愛普', '3529': '力旺'},
+    '矽智財': {'6643': 'M31', '6533': '晶心科'},
+    '傳統NB代工/品牌/週邊': {'3706': '神達', '2353': '宏碁', '2377': '微星', '2385': '群光'},
     '工業電腦': {'2395': '研華', '3005': '神基', '6414': '樺漢', '6166': '凌華'},
     '食品原物料/加工/品牌': {'1210': '大成', '1215': '卜蜂', '1229': '聯華', '1216': '統一', '1201': '味全'},
     '餐飲通路': {'2912': '統一超', '5903': '全家', '2727': '王品', '2729': '瓦城', '2753': '八方雲集', '2723': '美食-KY'},
@@ -149,7 +167,6 @@ groups = {
     '交通運輸': {'2618': '長榮航', '2610': '華航', '2646': '星宇航空', '6757': '台灣虎航', '2633': '台灣高鐵'},
     'PMIC': {'6415': '矽力-KY', '8081': '致新', '6719': '力智', '6138': '茂達'},
     '遊戲': {'3293': '鈊象', '3546': '宇峻', '3687': '歐買尬', '4946': '辣椒', '6180': '橘子'},
-    '矽智財': {'3661': '世芯-KY', '3443': '創意', '3529': '力旺', '6643': 'M31', '3035': '智原', '6533': '晶心科'},
     '融資租賃': {'5871': '中租-KY', '9941': '裕融', '8393': '格上'},
     '水泥': {'1101': '台泥', '1102': '亞泥', '1103': '嘉泥', '1104': '環泥', '1108': '幸福', '1109': '信大'},
     '化合物半導體': {'3105': '穩懋', '8086': '宏捷科', '3707': '漢磊', '6488': '環球晶', '3016': '嘉晶', '2455': '全新'},
@@ -163,7 +180,6 @@ groups = {
     '製鞋': {'9904': '寶成', '9910': '豐泰', '6890': '來億-KY'},
     '燃料電池': {'8996': '高力', '6282': '康舒', '1513': '中興電', '2308': '台達電'},
     '貴金屬回收': {'7610': '聯友金屬', '1785': '光洋科', '3663': '鑫科', '8390': '金益鼎'},
-    '台積電先進製程供應鏈': {'8028': '昇陽半導體', '1785': '光洋科', '1560': '中砂', '2680': '家登', '7556': '意德士', '3587': '閎康', '5434': '崇越'},
     '輪胎': {'2105': '正新', '2101': '南港', '2102': '泰豐', '2106': '建大', '2109': '華豐'},
     '特化': {'4772': '台特化', '1717': '長興', '4749': '新應材', '1773': '勝一', '5234': '達興材料', '4722': '國精化', '1727': '中華化', '4768': '晶呈科技'},
     '房地產': {'2542': '興富發', '2597': '潤弘', '5522': '遠雄', '2540': '愛山林', '2923': '鼎固-KY', '2539': '櫻花建'},
@@ -182,11 +198,23 @@ groups = {
     '保險': {'2867': '三商壽', '2850': '新產', '2851': '中再保', '2852': '第一保', '2832': '台產'},
     'BMC': {'5274': '信驊', '4919': '新唐', '6231': '系微'},
     '矽晶圓': {'6488': '環球晶', '3532': '台勝科', '5483': '中美晶', '6182': '合晶', '3016': '嘉晶'},
-    '光學鏡頭': {'3008': '大立光', '3406': '玉晶光', '3362': '先進光', '3441': '聯一光', '3019': '亞光'}
+    '光學鏡頭': {'3008': '大立光', '3406': '玉晶光', '3362': '先進光', '3441': '聯一光', '3019': '亞光'},
+    '先進封裝核心設備': {'3131': '弘塑', '3583': '辛耘', '6187': '萬潤', '2467': '志盛', '6640': '均華', '7734': '印能科技', '5443': '均豪'},
+    'PCB/IC載板設備與耗材': {'6664': '群翊', '7795': '長廣', '3167': '大量', '8021': '尖點'},
+    '再生晶圓/晶圓薄化': {'3583': '辛耘', '8028': '昇陽半導體', '1560': '中砂'},
+    '台積電先進製程耗材': {'1785': '光洋科', '5434': '崇越', '7556': '意德士', '3680': '家登'},
+    '自動測試設備(ATE)': {'7769': '鴻勁', '2360': '致茂'},
+    'AOI光學檢測設備': {'3535': '晶彩科', '3563': '牧德', '3455': '由田', '3030': '德律', '7822': '倍利科', '7853': '政美應用'},
+    '光通訊-上游磊晶與雷射光源': {'3081': '聯亞', '2455': '全新', '4991': '環宇-KY', '3105': '穩懋', '6789': '采鈺', '4971': '英特磊-KY'},
+    '光通訊-中下游模組、封裝與IC': {'6442': '光聖', '3450': '聯鈞', '3163': '波若威', '4979': '華星光', '6451': '訊芯-KY', '4977': '眾達-KY', '6526': '達發'},
+    '光通訊-下游FA/FAU': {'3008': '大立光', '3406': '玉晶光', '3362': '先進光', '3363': '上詮'},
 }
 
 if 'expanded_group' not in st.session_state:
     st.session_state['expanded_group'] = None
+
+st.session_state.setdefault('sort_period', None)
+st.session_state.setdefault('sort_dir', None)
 
 # ==========================================
 # 2. 核心運算
@@ -210,9 +238,12 @@ for g_name, ticker_dict in groups.items():
     valid_tickers = [t for t in tickers if t in close.columns]
     
     if valid_tickers:
-        row_entry["報酬_1"] = f"{close[valid_tickers].pct_change(1, fill_method=None).mean(axis=1).iloc[-1]*100:.2f}%"
+        raw_ret_1 = close[valid_tickers].pct_change(1, fill_method=None).mean(axis=1).iloc[-1]
+        row_entry["報酬_1"] = f"{raw_ret_1*100:.2f}%"
+        row_entry["raw_報酬_1"] = raw_ret_1
     else:
         row_entry["報酬_1"] = "0.00%"
+        row_entry["raw_報酬_1"] = 0.0
         
     for p in [5, 20, 60]:
         if not valid_tickers: continue
@@ -233,7 +264,28 @@ for g_name, ticker_dict in groups.items():
     row_entry["分類標記"] = 0 if has_any_excess else 1
     computed_rows.append(row_entry)
 
-df_computed = pd.DataFrame(computed_rows).sort_values(by=["分類標記", "raw_報酬_5"], ascending=[True, False]).reset_index(drop=True)
+df_computed_raw = pd.DataFrame(computed_rows)
+
+SORT_COL_MAP = {"1": "raw_報酬_1", "5": "raw_報酬_5", "20": "raw_報酬_20", "60": "raw_報酬_60"}
+
+def get_sorted_df(df_raw):
+    col = st.session_state.get("sort_period")
+    direction = st.session_state.get("sort_dir")
+    if col and direction:
+        return df_raw.sort_values(by=SORT_COL_MAP[col], ascending=(direction == "asc")).reset_index(drop=True)
+    return df_raw.sort_values(by=["分類標記", "raw_報酬_5"], ascending=[True, False]).reset_index(drop=True)
+
+def cycle_sort(period):
+    cur_col = st.session_state.get("sort_period")
+    cur_dir = st.session_state.get("sort_dir")
+    if cur_col != period:
+        st.session_state["sort_period"] = period
+        st.session_state["sort_dir"] = "desc"
+    elif cur_dir == "desc":
+        st.session_state["sort_dir"] = "asc"
+    else:
+        st.session_state["sort_period"] = None
+        st.session_state["sort_dir"] = None
 
 # ==========================================
 # 3. UI 繪圖與標籤函數
@@ -351,15 +403,35 @@ def draw_spark_stock_trends_svg(ticker_dict):
 st.title("台股族群漲跌幅")
 st.markdown("<br>", unsafe_allow_html=True)
 
+def render_sort_header(col, label, period):
+    with col:
+        c_label, c_btn = st.columns([3, 1], gap="small")
+        with c_label:
+            st.markdown(f"<span style='font-size: 1.5rem; white-space: nowrap;'>{label}</span>", unsafe_allow_html=True)
+        with c_btn:
+            active = st.session_state.get("sort_period") == period
+            cur_dir = st.session_state.get("sort_dir")
+            if active and cur_dir == "desc":
+                symbol = "△\n▼"
+            elif active and cur_dir == "asc":
+                symbol = "▲\n▽"
+            else:
+                symbol = "△\n▽"
+            if st.button(symbol, key=f"sortbtn_{period}"):
+                cycle_sort(period)
+                st.rerun()
+
 col_h_space, col_h_name, col_h_d, col_h_w, col_h_m, col_h_q, col_h_v = st.columns([0.01, 1.75, 1.2, 1.2, 1.2, 1.2, 1.4])
 with col_h_space: st.write("") # 留空，用來當作左邊的填充
 with col_h_name: st.markdown("<span style='font-size: 1.5rem;'>族群名稱</span>", unsafe_allow_html=True)
-with col_h_d: st.markdown("<span style='font-size: 1.5rem;'>近日報酬</span>", unsafe_allow_html=True)
-with col_h_w: st.markdown("<span style='font-size: 1.5rem;'>近週報酬</span>", unsafe_allow_html=True)
-with col_h_m: st.markdown("<span style='font-size: 1.5rem;'>近月報酬</span>", unsafe_allow_html=True)
-with col_h_q: st.markdown("<span style='font-size: 1.5rem;'>近季報酬</span>", unsafe_allow_html=True)
+render_sort_header(col_h_d, "近日報酬", "1")
+render_sort_header(col_h_w, "近週報酬", "5")
+render_sort_header(col_h_m, "近月報酬", "20")
+render_sort_header(col_h_q, "近季報酬", "60")
 with col_h_v: st.markdown("<span style='font-size: 1.5rem;'>近月量能/走勢</span>", unsafe_allow_html=True)
 st.markdown("<hr style='margin: 5px 0 15px 0; border-top: 2px solid #ccc;'>", unsafe_allow_html=True)
+
+df_computed = get_sorted_df(df_computed_raw)
 
 with st.container(height=550):
     # 大盤置頂
@@ -374,7 +446,7 @@ with st.container(height=550):
         
     st.markdown("<hr style='margin: 15px 0; border-top: 2px solid #555;'>", unsafe_allow_html=True)
 
-    # 循環渲染 21 個完整族群
+    # 循環渲染所有族群
     if not df_computed.empty:
         for _, row in df_computed.iterrows():
             g_name = row['族群名稱']
