@@ -28,7 +28,7 @@ st.markdown("""
         margin-bottom: 0px !important;
     }
     [data-testid="stHorizontalBlock"] {
-        margin-bottom: 8px !important;
+        margin-bottom: 4px !important;
     }
     .element-container {
         margin-bottom: 0px !important;
@@ -83,8 +83,10 @@ st.markdown("""
         color: #FF8500 !important;
     }
 
-    /* 手機版標題點擊按鈕透明無邊框化 */
-    [class*="st-key-mob_title_"] div.stButton > button {
+    /* 手機版族群標題按鈕專用樣式 */
+    [class*="st-key-mob_btn_"] div.stButton > button,
+    [class*="st-key-mob_btn_"] div.stButton > button p,
+    [class*="st-key-mob_btn_"] div.stButton > button span {
         font-size: 18px !important;
         font-weight: bold !important;
         color: #FFFFFF !important;
@@ -94,11 +96,6 @@ st.markdown("""
         min-height: 0px !important;
         border: none !important;
         background: transparent !important;
-    }
-
-    /* 徹底消滅 Streamlit 空白方塊與空容器 */
-    div[data-testid="stVerticalBlock"] > div:has(div:empty) {
-        display: none !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -124,7 +121,7 @@ def load_data():
 close, volume, twii, market_value, twii_amount = load_data()
 
 # ==========================================
-# 1. 側邊欄設定 (精簡為選項名稱)
+# 1. 側邊欄設定 (精簡選項名稱)
 # ==========================================
 st.sidebar.header("看盤設定")
 view_mode = st.sidebar.radio("", ["📱 手機版", "💻 電腦版"], index=0)
@@ -458,10 +455,12 @@ if "手機" in view_mode:
             badge_20 = get_status_badge_mobile(row['狀態_20'])
             badge_60 = get_status_badge_mobile(row['狀態_60'])
             
-            # 使用單一 HTML 輸出上半部與 4 欄網格，徹底清除中間多餘的空方塊
-            c_title, c_vol = st.columns([1.4, 2.6])
+            # 使用精準卡片包裹，確保族群標題按鈕、量能圖與報酬數據均穩定顯現
+            st.markdown('<div style="background:#161B22; border:1px solid #30363D; border-radius:12px; padding:12px; margin-bottom:14px;">', unsafe_allow_html=True)
+            
+            c_title, c_vol = st.columns([1.5, 2.5])
             with c_title:
-                st.markdown(f"<div class='st-key-mob_title_{g_name}'>", unsafe_allow_html=True)
+                st.markdown(f"<div class='st-key-mob_btn_{g_name}'>", unsafe_allow_html=True)
                 if st.button(f"✦ {g_name}", key=f"mob_btn_{g_name}"):
                     if st.session_state['expanded_group'] == g_name:
                         st.session_state['expanded_group'] = None
@@ -472,8 +471,7 @@ if "手機" in view_mode:
                 draw_spark_volume(g_name, list(groups[g_name].keys()), key_suffix="_mob")
                 
             card_grid_html = (
-                '<div style="background:#161B22; border:1px solid #30363D; border-radius:12px; padding:10px; margin-top:-6px; margin-bottom:12px;">'
-                '<div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:4px; text-align:center;">'
+                '<div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:4px; text-align:center; margin-top:8px;">'
                 '<div style="background:#0D1117; padding:6px 2px; border-radius:8px;">'
                 '<div style="font-size:11px; color:#8B949E;">近日</div>'
                 f'<div style="font-size:13px; font-weight:bold; color:#FFF; margin:4px 0;">{ret_1}</div>'
@@ -494,13 +492,15 @@ if "手機" in view_mode:
                 f'{badge_60}'
                 '</div>'
                 '</div>'
-                '</div>'
             )
             st.markdown(card_grid_html, unsafe_allow_html=True)
             
             # 點擊族群標題後，僅展開成分股走勢圖
             if st.session_state['expanded_group'] == g_name:
+                st.markdown("<hr style='margin:10px 0; border-top:1px dashed #30363D;'>", unsafe_allow_html=True)
                 draw_spark_stock_trends_svg(groups[g_name])
+                
+            st.markdown('</div>', unsafe_allow_html=True)
 
 # ==========================================
 # 💻 模式 2：電腦版
