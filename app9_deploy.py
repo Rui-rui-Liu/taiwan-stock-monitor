@@ -9,7 +9,7 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="台股族群漲跌幅", layout="wide")
 
 # ==========================================
-# 【全域 UI 與 CSS 注入】：支援 RWD 自動判定與經典黑底
+# 【全域 UI 與 CSS 注入】：強效 RWD 切換與黑底風格
 # ==========================================
 st.markdown("""
 <style>
@@ -84,16 +84,22 @@ st.markdown("""
     }
 
     /* ==========================================
-       📱 自動 RWD 裝置切換機制 (Media Query)
+       📱 自動 RWD 裝置切換機制 (修復桌機顯示問題)
        ========================================== */
-    @media (min-width: 769px) {
+    @media screen and (min-width: 769px) {
         .mobile-only-view {
             display: none !important;
         }
+        .desktop-only-view {
+            display: block !important;
+        }
     }
-    @media (max-width: 768px) {
+    @media screen and (max-width: 768px) {
         .desktop-only-view {
             display: none !important;
+        }
+        .mobile-only-view {
+            display: block !important;
         }
     }
 </style>
@@ -299,17 +305,15 @@ def cycle_sort(period):
 # ==========================================
 # 3. UI 繪圖與標籤函數
 # ==========================================
-# 手機版簡化膠囊按鈕 (高彩度文字)
 def get_status_badge_mobile(status):
     if "🔥 超額報酬" in status:
-        return '<span style="background-color:#FFD2D2; color:#D60000; padding:2px 8px; border-radius:12px; font-weight:bold; font-size:12px; display:inline-block;">🔥 超額</span>'
+        return '<span style="background-color:#FFD2D2; color:#D60000; padding:2px 6px; border-radius:10px; font-weight:bold; font-size:11px; display:inline-block;">🔥 超額</span>'
     elif "❄️ 報酬落後" in status:
-        return '<span style="background-color:#E2F3FF; color:#0066CC; padding:2px 8px; border-radius:12px; font-weight:bold; font-size:12px; display:inline-block;">❄️ 落後</span>'
+        return '<span style="background-color:#E2F3FF; color:#0066CC; padding:2px 6px; border-radius:10px; font-weight:bold; font-size:11px; display:inline-block;">❄️ 落後</span>'
     elif "🟢 近似大盤" in status:
-        return '<span style="background-color:#E8E8E8; color:#333333; padding:2px 8px; border-radius:12px; font-size:12px; display:inline-block;">🟢 近似</span>'
+        return '<span style="background-color:#E8E8E8; color:#333333; padding:2px 6px; border-radius:10px; font-size:11px; display:inline-block;">🟢 近似</span>'
     return ''
 
-# 桌機版標準膠囊按鈕
 def get_status_html(status):
     if "🔥 超額報酬" in status:
         return '<div style="background-color:#FFD2D2; color:#D60000; padding:2px 8px; border-radius:12px; font-weight:bold; font-size:12px; display:inline-block; margin-top:-22px; margin-bottom:10px;">🔥 超額報酬</div>'
@@ -338,7 +342,7 @@ def draw_spark_volume(g_name, tickers_list, key_suffix=""):
         textposition='none' 
     )])
     fig.update_layout(
-        height=38, margin=dict(l=0, r=0, t=2, b=2),
+        height=32, margin=dict(l=0, r=0, t=0, b=0),
         xaxis=dict(visible=False, type='category'), 
         yaxis=dict(visible=False),
         showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
@@ -425,7 +429,6 @@ df_computed = get_sorted_df(df_computed_raw)
 # ==========================================
 st.markdown("<div class='mobile-only-view'>", unsafe_allow_html=True)
 
-# 加權指數卡片 (無皇冠、單行呈現)
 taiex_ret_1 = returns_t[1].iloc[-1] * 100
 taiex_ret_5 = returns_t[5].iloc[-1] * 100
 taiex_ret_20 = returns_t[20].iloc[-1] * 100
@@ -443,7 +446,6 @@ taiex_html = (
 )
 st.markdown(taiex_html, unsafe_allow_html=True)
 
-# 循環渲染手機卡片 (完全對齊圖1樣式)
 if not df_computed.empty:
     for _, row in df_computed.iterrows():
         g_name = row['族群名稱']
@@ -456,49 +458,50 @@ if not df_computed.empty:
         badge_20 = get_status_badge_mobile(row['狀態_20'])
         badge_60 = get_status_badge_mobile(row['狀態_60'])
         
-        # 外層卡片開始包覆
         st.markdown('<div style="background:#161B22; border:1px solid #30363D; border-radius:12px; padding:12px; margin-bottom:12px;">', unsafe_allow_html=True)
         
-        # 卡片頂部：左邊按鈕可點擊開關，右邊顯示 1D 報酬
-        c_left, c_right = st.columns([2.5, 1.5])
-        with c_left:
+        # 頂部：左邊為「✦ 族群標題按鈕」，右邊直接繪製「量能柱狀圖」
+        c_title, c_vol = st.columns([1.5, 2.5])
+        with c_title:
             if st.button(f"✦ {g_name}", key=f"mob_btn_{g_name}"):
                 if st.session_state['expanded_group'] == g_name:
                     st.session_state['expanded_group'] = None
                 else:
                     st.session_state['expanded_group'] = g_name
-        with c_right:
-            st.markdown(f'<div style="text-align:right; font-size:13px; color:#A0A5B5; line-height:32px;">1D 報酬 <b style="color:#FFFFFF; font-size:15px;">{ret_1}</b></div>', unsafe_allow_html=True)
+        with c_vol:
+            draw_spark_volume(g_name, list(groups[g_name].keys()), key_suffix="_mob")
             
         st.markdown('<hr style="margin:4px 0 8px 0; border-top:1px solid #21262D;">', unsafe_allow_html=True)
         
-        # 卡片下半部：精準 3 欄網格 (5D/20D/60D + 簡化膠囊標籤)
+        # 下半部：4 欄完美排列（近日 / 近週 / 近月 / 近季）
         card_grid_html = (
-            '<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; text-align:center;">'
-            '<div style="background:#0D1117; padding:8px 4px; border-radius:8px;">'
-            '<div style="font-size:12px; color:#8B949E;">5D 報酬</div>'
-            f'<div style="font-size:15px; font-weight:bold; color:#FFF; margin:4px 0;">{ret_5}</div>'
+            '<div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:4px; text-align:center;">'
+            '<div style="background:#0D1117; padding:6px 2px; border-radius:8px;">'
+            '<div style="font-size:11px; color:#8B949E;">近日</div>'
+            f'<div style="font-size:13px; font-weight:bold; color:#FFF; margin:4px 0;">{ret_1}</div>'
+            '</div>'
+            '<div style="background:#0D1117; padding:6px 2px; border-radius:8px;">'
+            '<div style="font-size:11px; color:#8B949E;">近週</div>'
+            f'<div style="font-size:13px; font-weight:bold; color:#FFF; margin:4px 0;">{ret_5}</div>'
             f'{badge_5}'
             '</div>'
-            '<div style="background:#0D1117; padding:8px 4px; border-radius:8px;">'
-            '<div style="font-size:12px; color:#8B949E;">近月 20D</div>'
-            f'<div style="font-size:15px; font-weight:bold; color:#FFF; margin:4px 0;">{ret_20}</div>'
+            '<div style="background:#0D1117; padding:6px 2px; border-radius:8px;">'
+            '<div style="font-size:11px; color:#8B949E;">近月</div>'
+            f'<div style="font-size:13px; font-weight:bold; color:#FFF; margin:4px 0;">{ret_20}</div>'
             f'{badge_20}'
             '</div>'
-            '<div style="background:#0D1117; padding:8px 4px; border-radius:8px;">'
-            '<div style="font-size:12px; color:#8B949E;">近季 60D</div>'
-            f'<div style="font-size:15px; font-weight:bold; color:#FFF; margin:4px 0;">{ret_60}</div>'
+            '<div style="background:#0D1117; padding:6px 2px; border-radius:8px;">'
+            '<div style="font-size:11px; color:#8B949E;">近季</div>'
+            f'<div style="font-size:13px; font-weight:bold; color:#FFF; margin:4px 0;">{ret_60}</div>'
             f'{badge_60}'
             '</div>'
             '</div>'
         )
         st.markdown(card_grid_html, unsafe_allow_html=True)
         
-        # 點擊「✦ 族群名稱」後展開量能圖與成分股走勢
+        # 點擊族群標題按鈕後，僅展開成分股走勢圖
         if st.session_state['expanded_group'] == g_name:
             st.markdown("<hr style='margin:10px 0; border-top:1px dashed #30363D;'>", unsafe_allow_html=True)
-            draw_spark_volume(g_name, list(groups[g_name].keys()), key_suffix="_mob")
-            st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
             draw_spark_stock_trends_svg(groups[g_name])
             
         st.markdown('</div>', unsafe_allow_html=True)
