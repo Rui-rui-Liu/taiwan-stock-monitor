@@ -33,7 +33,7 @@ st.markdown("""
     .element-container {
         margin-bottom: 0px !important;
     }
-    /* 按鈕偽裝成純白大字 */
+    /* 按鈕偽裝成純白大字 (桌機版使用) */
     div.stButton > button, 
     div.stButton > button p, 
     div.stButton > button span {
@@ -83,8 +83,21 @@ st.markdown("""
         color: #FF8500 !important;
     }
 
-    /* 隱藏無用空白容器與乾淨對齊 */
-    [data-testid="stVerticalBlock"] > div:empty {
+    /* 手機版標題點擊按鈕透明無邊框化 */
+    [class*="st-key-mob_title_"] div.stButton > button {
+        font-size: 18px !important;
+        font-weight: bold !important;
+        color: #FFFFFF !important;
+        padding: 0px !important;
+        margin: 0px !important;
+        height: auto !important;
+        min-height: 0px !important;
+        border: none !important;
+        background: transparent !important;
+    }
+
+    /* 徹底消滅 Streamlit 空白方塊與空容器 */
+    div[data-testid="stVerticalBlock"] > div:has(div:empty) {
         display: none !important;
     }
 </style>
@@ -111,10 +124,10 @@ def load_data():
 close, volume, twii, market_value, twii_amount = load_data()
 
 # ==========================================
-# 1. 側邊欄設定
+# 1. 側邊欄設定 (精簡為選項名稱)
 # ==========================================
-st.sidebar.header("看盤與監控設定")
-view_mode = st.sidebar.radio("版面模式", ["📱 手機", "💻 電腦"], index=0)
+st.sidebar.header("看盤設定")
+view_mode = st.sidebar.radio("", ["📱 手機版", "💻 電腦版"], index=0)
 st.sidebar.markdown("---")
 sigma_5 = st.sidebar.slider("近週 σ 倍數", min_value=0.0, max_value=3.0, value=1.0, step=0.1)
 sigma_20 = st.sidebar.slider("近月 σ 倍數", min_value=0.0, max_value=3.0, value=1.0, step=0.1)
@@ -240,366 +253,4 @@ for g_name, ticker_dict in groups.items():
     valid_tickers = [t for t in tickers if t in close.columns]
     
     if valid_tickers:
-        raw_ret_1 = close[valid_tickers].pct_change(1, fill_method=None).mean(axis=1).iloc[-1]
-        row_entry["報酬_1"] = f"{raw_ret_1*100:.2f}%"
-        row_entry["raw_報酬_1"] = raw_ret_1
-    else:
-        row_entry["報酬_1"] = "0.00%"
-        row_entry["raw_報酬_1"] = 0.0
-        
-    for p in [5, 20, 60]:
-        if not valid_tickers: continue
-        sub_c = close[valid_tickers].tail(p).ffill()
-        g_ret = (sub_c.div(sub_c.iloc[0]) - 1).mean(axis=1).iloc[-1]
-        row_entry[f"報酬_{p}"] = f"{g_ret*100:.2f}%"
-        row_entry[f"raw_報酬_{p}"] = g_ret  
-        
-        aligned_thresh_up = thresholds[p].reindex(close.index).iloc[-1]
-        aligned_twii_ret = returns_t[p].reindex(close.index).iloc[-1]
-        aligned_thresh_down = aligned_twii_ret - (aligned_thresh_up - aligned_twii_ret)
-        
-        if g_ret > aligned_thresh_up: row_entry[f"狀態_{p}"] = "🔥 超額報酬"
-        elif g_ret < aligned_thresh_down: row_entry[f"狀態_{p}"] = "❄️ 報酬落後"
-        else: row_entry[f"狀態_{p}"] = "🟢 近似大盤"
-            
-    has_any_excess = (row_entry.get("狀態_5", "") == "🔥 超額報酬" or row_entry.get("狀態_20", "") == "🔥 超額報酬" or row_entry.get("狀態_60", "") == "🔥 超額報酬")
-    row_entry["分類標記"] = 0 if has_any_excess else 1
-    computed_rows.append(row_entry)
-
-df_computed_raw = pd.DataFrame(computed_rows)
-
-SORT_COL_MAP = {"1": "raw_報酬_1", "5": "raw_報酬_5", "20": "raw_報酬_20", "60": "raw_報酬_60"}
-
-def get_sorted_df(df_raw):
-    col = st.session_state.get("sort_period")
-    direction = st.session_state.get("sort_dir")
-    if col and direction:
-        return df_raw.sort_values(by=SORT_COL_MAP[col], ascending=(direction == "asc")).reset_index(drop=True)
-    return df_raw.sort_values(by=["分類標記", "raw_報酬_5"], ascending=[True, False]).reset_index(drop=True)
-
-def cycle_sort(period):
-    cur_col = st.session_state.get("sort_period")
-    cur_dir = st.session_state.get("sort_dir")
-    if cur_col != period:
-        st.session_state["sort_period"] = period
-        st.session_state["sort_dir"] = "desc"
-    elif cur_dir == "desc":
-        st.session_state["sort_dir"] = "asc"
-    else:
-        st.session_state["sort_period"] = None
-        st.session_state["sort_dir"] = None
-
-# ==========================================
-# 3. UI 繪圖與標籤函數 (精準顏色與顯眼對比)
-# ==========================================
-def get_status_badge_mobile(status):
-    if "🔥 超額報酬" in status:
-        return '<span style="background-color:#3A1414; color:#FF3B30; border:1px solid #FF3B30; padding:2px 6px; border-radius:10px; font-weight:bold; font-size:11px; display:inline-block;">🔥 超額</span>'
-    elif "❄️ 報酬落後" in status:
-        return '<span style="background-color:#102A43; color:#007AFF; border:1px solid #007AFF; padding:2px 6px; border-radius:10px; font-weight:bold; font-size:11px; display:inline-block;">❄️ 落後</span>'
-    elif "🟢 近似大盤" in status:
-        return '<span style="background-color:#16331E; color:#34C759; border:1px solid #34C759; padding:2px 6px; border-radius:10px; font-weight:bold; font-size:11px; display:inline-block;">🟢 近似</span>'
-    return ''
-
-def get_status_html(status):
-    if "🔥 超額報酬" in status:
-        return '<div style="background-color:#FFD2D2; color:#D60000; padding:2px 8px; border-radius:12px; font-weight:bold; font-size:12px; display:inline-block; margin-top:-22px; margin-bottom:10px;">🔥 超額報酬</div>'
-    elif "❄️ 報酬落後" in status:
-        return '<div style="background-color:#E2F3FF; color:#0066CC; padding:2px 8px; border-radius:12px; font-weight:bold; font-size:12px; display:inline-block; margin-top:-22px; margin-bottom:10px;">❄️ 報酬落後</div>'
-    elif "🟢 近似大盤" in status:
-        return '<div style="background-color:#E8E8E8; color:#666666; padding:2px 8px; border-radius:12px; font-size:12px; display:inline-block; margin-top:-22px; margin-bottom:10px;">🟢 近似大盤</div>'
-    return ''
-
-def draw_spark_volume(g_name, tickers_list, key_suffix=""):
-    valid_v = [t for t in tickers_list if t in volume.columns]
-    if not valid_v: return
-    
-    g_vol_series = (volume[valid_v] / 1000).tail(20).ffill().sum(axis=1)
-    date_labels = g_vol_series.index.strftime('%m-%d')
-    hover_text = [f"{v:.0f}張" for v in g_vol_series]
-    category_x = [f"D{i}" for i in range(1, 21)]
-    
-    fig = go.Figure(data=[go.Bar(
-        x=category_x, 
-        y=g_vol_series, 
-        marker_color='#4A90E2', 
-        opacity=0.85,
-        customdata=np.stack((date_labels, hover_text), axis=-1), 
-        hovertemplate="(%{customdata[0]}, %{customdata[1]})<extra></extra>", 
-        textposition='none' 
-    )])
-    fig.update_layout(
-        height=32, margin=dict(l=0, r=0, t=0, b=0),
-        xaxis=dict(visible=False, type='category'), 
-        yaxis=dict(visible=False),
-        showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
-    )
-    st.plotly_chart(fig, width='stretch', config={'displayModeBar': False}, key=f"vol_bar_{g_name}{key_suffix}")
-
-def draw_market_volume_amt(key_suffix=""):
-    m_amt_series = twii_amount.tail(20).ffill() / 10**8
-    date_labels = m_amt_series.index.strftime('%m-%d')
-    hover_text = [f"{v:.1f}億" for v in m_amt_series]
-    category_x = [f"D{i}" for i in range(1, 21)]
-    
-    fig = go.Figure(data=[go.Bar(
-        x=category_x, 
-        y=m_amt_series, 
-        marker_color='#FF8500', 
-        opacity=0.85,
-        customdata=np.stack((date_labels, hover_text), axis=-1),
-        hovertemplate="(%{customdata[0]}, %{customdata[1]})<extra></extra>", 
-        textposition='none' 
-    )])
-    fig.update_layout(
-        height=38, margin=dict(l=0, r=0, t=2, b=2),
-        xaxis=dict(visible=False, type='category'), 
-        yaxis=dict(visible=False),
-        showlegend=False, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)'
-    )
-    st.plotly_chart(fig, width='stretch', config={'displayModeBar': False}, key=f"vol_bar_TAIEX_market{key_suffix}")
-
-def draw_spark_stock_trends_svg(ticker_dict):
-    tickers = list(ticker_dict.keys())
-    valid_t = [t for t in tickers if t in close.columns]
-    if not valid_t:
-        st.info("暫無成分股資料")
-        return
-        
-    latest_mv = market_value[valid_t].ffill().iloc[-1]
-    valid_t = latest_mv.sort_values(ascending=False).index.tolist()
-    
-    stock_cols = st.columns(5)
-    for idx, t in enumerate(valid_t):
-        name = ticker_dict[t]
-        col_target = stock_cols[idx % 5]
-        with col_target:
-            single_c = close[t].tail(20).ffill().values
-            if len(single_c) < 2: continue
-            single_cum = ((single_c / single_c[0]) - 1) * 100
-            
-            c_min, c_max = single_cum.min(), single_cum.max()
-            c_range = (c_max - c_min) if (c_max - c_min) != 0 else 1
-            
-            points = []
-            for i, val in enumerate(single_cum):
-                x = (i / (len(single_cum) - 1)) * 160
-                y = 35 - ((val - c_min) / c_range) * 30 
-                points.append(f"{x},{y}")
-            points_str = " ".join(points)
-            
-            line_color = '#FF4A4A' if single_cum[-1] >= 0 else '#2ECE5E'
-            
-            svg_html = f"""
-            <div style="margin-bottom: 20px; padding: 5px;">
-                <span style="font-size:13px; font-weight:bold; color:#A0A5B5;">📍 {t} {name}</span><br>
-                <span style="font-size:12px; font-weight:bold; color:{line_color};">{single_cum[-1]:+.2f}%</span>
-                <div style="margin-top: 4px;">
-                    <svg width="100%" height="38" viewBox="0 0 160 40" style="background: transparent;">
-                        <polyline fill="none" stroke="{line_color}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" points="{points_str}" />
-                    </svg>
-                </div>
-            </div>
-            """
-            st.markdown(svg_html, unsafe_allow_html=True)
-
-# ==========================================
-# 4. 主要主頁表格渲染
-# ==========================================
-st.title("台股族群漲跌幅")
-st.markdown("<br>", unsafe_allow_html=True)
-
-df_computed = get_sorted_df(df_computed_raw)
-
-# ==========================================
-# 📱 模式 1：手機版
-# ==========================================
-if "手機" in view_mode:
-    taiex_ret_1 = returns_t[1].iloc[-1] * 100
-    taiex_ret_5 = returns_t[5].iloc[-1] * 100
-    taiex_ret_20 = returns_t[20].iloc[-1] * 100
-    taiex_ret_60 = returns_t[60].iloc[-1] * 100
-
-    # 加權指數卡片：採用 4 欄 CSS Grid 均分排列
-    taiex_html = (
-        '<div style="background:#161B22; border:1px solid #30363D; border-radius:12px; padding:14px; margin-bottom:15px;">'
-        '<div style="font-size:18px; font-weight:bold; color:#FFFFFF; margin-bottom:10px;">加權指數報酬</div>'
-        '<div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:4px; text-align:center;">'
-        f'<div><span style="font-size:11px; color:#8B949E;">近日</span><br><b style="color:#FFF; font-size:13px;">{taiex_ret_1:+.2f}%</b></div>'
-        f'<div><span style="font-size:11px; color:#8B949E;">近週</span><br><b style="color:#FFF; font-size:13px;">{taiex_ret_5:+.2f}%</b></div>'
-        f'<div><span style="font-size:11px; color:#8B949E;">近月</span><br><b style="color:#FFF; font-size:13px;">{taiex_ret_20:+.2f}%</b></div>'
-        f'<div><span style="font-size:11px; color:#8B949E;">近季</span><br><b style="color:#FFF; font-size:13px;">{taiex_ret_60:+.2f}%</b></div>'
-        '</div></div>'
-    )
-    st.markdown(taiex_html, unsafe_allow_html=True)
-
-    if not df_computed.empty:
-        for _, row in df_computed.iterrows():
-            g_name = row['族群名稱']
-            ret_1 = row['報酬_1']
-            ret_5 = row['報酬_5']
-            ret_20 = row['報酬_20']
-            ret_60 = row['報酬_60']
-            
-            badge_5 = get_status_badge_mobile(row['狀態_5'])
-            badge_20 = get_status_badge_mobile(row['狀態_20'])
-            badge_60 = get_status_badge_mobile(row['狀態_60'])
-            
-            # 使用 Streamlit 內建容器，完全不殘留空白多餘框
-            with st.container():
-                st.markdown('<div style="background:#161B22; border:1px solid #30363D; border-radius:12px; padding:12px; margin-bottom:12px;">', unsafe_allow_html=True)
-                
-                # 上半部：標題按鈕與右側量能圖
-                c_title, c_vol = st.columns([1.4, 2.6])
-                with c_title:
-                    if st.button(f"✦ {g_name}", key=f"mob_btn_{g_name}"):
-                        if st.session_state['expanded_group'] == g_name:
-                            st.session_state['expanded_group'] = None
-                        else:
-                            st.session_state['expanded_group'] = g_name
-                with c_vol:
-                    draw_spark_volume(g_name, list(groups[g_name].keys()), key_suffix="_mob")
-                    
-                st.markdown('<hr style="margin:4px 0 8px 0; border-top:1px solid #21262D;">', unsafe_allow_html=True)
-                
-                # 下半部：近日 / 近週 / 近月 / 近季 4 欄完美卡片
-                card_grid_html = (
-                    '<div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:4px; text-align:center;">'
-                    '<div style="background:#0D1117; padding:6px 2px; border-radius:8px;">'
-                    '<div style="font-size:11px; color:#8B949E;">近日</div>'
-                    f'<div style="font-size:13px; font-weight:bold; color:#FFF; margin:4px 0;">{ret_1}</div>'
-                    '</div>'
-                    '<div style="background:#0D1117; padding:6px 2px; border-radius:8px;">'
-                    '<div style="font-size:11px; color:#8B949E;">近週</div>'
-                    f'<div style="font-size:13px; font-weight:bold; color:#FFF; margin:4px 0;">{ret_5}</div>'
-                    f'{badge_5}'
-                    '</div>'
-                    '<div style="background:#0D1117; padding:6px 2px; border-radius:8px;">'
-                    '<div style="font-size:11px; color:#8B949E;">近月</div>'
-                    f'<div style="font-size:13px; font-weight:bold; color:#FFF; margin:4px 0;">{ret_20}</div>'
-                    f'{badge_20}'
-                    '</div>'
-                    '<div style="background:#0D1117; padding:6px 2px; border-radius:8px;">'
-                    '<div style="font-size:11px; color:#8B949E;">近季</div>'
-                    f'<div style="font-size:13px; font-weight:bold; color:#FFF; margin:4px 0;">{ret_60}</div>'
-                    f'{badge_60}'
-                    '</div>'
-                    '</div>'
-                )
-                st.markdown(card_grid_html, unsafe_allow_html=True)
-                
-                # 點擊族群標題後，僅展開成分股走勢圖
-                if st.session_state['expanded_group'] == g_name:
-                    st.markdown("<hr style='margin:10px 0; border-top:1px dashed #30363D;'>", unsafe_allow_html=True)
-                    draw_spark_stock_trends_svg(groups[g_name])
-                    
-                st.markdown('</div>', unsafe_allow_html=True)
-
-# ==========================================
-# 💻 模式 2：桌機/平板大表格版
-# ==========================================
-else:
-    def render_sort_header(col, label, period):
-        with col:
-            c_label, c_btn = st.columns([3, 1], gap="small")
-            with c_label:
-                st.markdown(f"<span style='font-size: 1.5rem; white-space: nowrap;'>{label}</span>", unsafe_allow_html=True)
-            with c_btn:
-                active = st.session_state.get("sort_period") == period
-                cur_dir = st.session_state.get("sort_dir")
-                symbol = "△\n▼" if (active and cur_dir == "desc") else ("▲\n▽" if (active and cur_dir == "asc") else "△\n▽")
-                if st.button(symbol, key=f"sortbtn_{period}"):
-                    cycle_sort(period)
-                    st.rerun()
-
-    col_h_space, col_h_name, col_h_d, col_h_w, col_h_m, col_h_q, col_h_v = st.columns([0.01, 1.75, 1.2, 1.2, 1.2, 1.2, 1.4])
-    with col_h_space: st.write("")
-    with col_h_name: st.markdown("<span style='font-size: 1.5rem;'>族群名稱</span>", unsafe_allow_html=True)
-    render_sort_header(col_h_d, "近日報酬", "1")
-    render_sort_header(col_h_w, "近週報酬", "5")
-    render_sort_header(col_h_m, "近月報酬", "20")
-    render_sort_header(col_h_q, "近季報酬", "60")
-    with col_h_v: st.markdown("<span style='font-size: 1.5rem;'>近月量能/走勢</span>", unsafe_allow_html=True)
-    st.markdown("<hr style='margin: 5px 0 15px 0; border-top: 2px solid #ccc;'>", unsafe_allow_html=True)
-
-    with st.container(height=550):
-        col_n, col_d, col_w, col_m, col_q, col_v = st.columns([1.8, 1.2, 1.2, 1.2, 1.2, 1.4])
-        with col_n: st.markdown("<h3 style='margin-left: 5px; font-weight: bold; font-size: 27px;'>加權指數</h3>", unsafe_allow_html=True)
-        with col_d: st.metric(label="1D", label_visibility="collapsed", value=f"{returns_t[1].iloc[-1]*100:.2f}%")
-        with col_w: st.metric(label="5D", label_visibility="collapsed", value=f"{returns_t[5].iloc[-1]*100:.2f}%")
-        with col_m: st.metric(label="20D", label_visibility="collapsed", value=f"{returns_t[20].iloc[-1]*100:.2f}%")
-        with col_q: st.metric(label="60D", label_visibility="collapsed", value=f"{returns_t[60].iloc[-1]*100:.2f}%")
-        with col_v: 
-            draw_market_volume_amt(key_suffix="_desk")
-            
-        st.markdown("<hr style='margin: 15px 0; border-top: 2px solid #555;'>", unsafe_allow_html=True)
-
-        if not df_computed.empty:
-            for _, row in df_computed.iterrows():
-                g_name = row['族群名稱']
-                col_n, col_d, col_w, col_m, col_q, col_v = st.columns([1.8, 1.2, 1.2, 1.2, 1.2, 1.4])
-                
-                with col_n:
-                    if st.button(g_name, key=f"desk_btn_{g_name}"):
-                        if st.session_state['expanded_group'] == g_name:
-                            st.session_state['expanded_group'] = None
-                        else:
-                            st.session_state['expanded_group'] = g_name
-                        
-                with col_d: st.metric(label="1D", label_visibility="collapsed", value=row['報酬_1'])
-                with col_w:
-                    st.metric(label="5D", label_visibility="collapsed", value=row['報酬_5'])
-                    st.markdown(get_status_html(row['狀態_5']), unsafe_allow_html=True)
-                with col_m:
-                    st.metric(label="20D", label_visibility="collapsed", value=row['報酬_20'])
-                    st.markdown(get_status_html(row['狀態_20']), unsafe_allow_html=True)
-                with col_q:
-                    st.metric(label="60D", label_visibility="collapsed", value=row['報酬_60'])
-                    st.markdown(get_status_html(row['狀態_60']), unsafe_allow_html=True)
-                with col_v:
-                    draw_spark_volume(g_name, list(groups[g_name].keys()), key_suffix="_desk")
-                    
-                if st.session_state['expanded_group'] == g_name:
-                    st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
-                    draw_spark_stock_trends_svg(groups[g_name])
-                    
-                st.markdown("<hr style='margin: 12px 0 15px 0; border-top: 1px solid #333;'>", unsafe_allow_html=True)
-
-# ==========================================
-# 5. 下半部網頁呈現：大盤歷史對照圖
-# ==========================================
-st.markdown("<br>", unsafe_allow_html=True)
-st.subheader("族群報酬 vs. 加權報酬指數")
-
-col_sel, col_time = st.columns([2, 1])
-with col_sel:
-    chosen_g_name = st.selectbox("選擇對照族群", list(groups.keys()), index=0)
-with col_time:
-    chart_window = st.selectbox("圖表歷史區間", ["週", "月", "季", "半年", "一年", "三年"], index=4)
-
-window_map = {"週": 5, "月": 20, "季": 60, "半年": 120, "一年": 252, "三年": 756}
-w_days = window_map[chart_window]
-
-g_tickers = list(groups[chosen_g_name].keys())
-valid_plot_tickers = [t for t in g_tickers if t in close.columns]
-
-if valid_plot_tickers:
-    sub_close = close[valid_plot_tickers].tail(w_days).ffill()
-    sub_twii = twii.tail(w_days)
-    
-    group_each_cum = sub_close.div(sub_close.iloc[0]) - 1
-    twii_cum_return = (sub_twii / sub_twii.iloc[0]) - 1
-    group_cum_return = group_each_cum.mean(axis=1)
-
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=twii_cum_return.index, y=twii_cum_return * 100, name='加權指數累積報酬 (%)', line=dict(color='#888888', width=2)))
-    fig.add_trace(go.Scatter(x=group_cum_return.index, y=group_cum_return * 100, name=f'{chosen_g_name} 族群累積報酬 (%)', line=dict(color='#FF8500', width=3)))
-    
-    fig.update_layout(
-        xaxis_title="日期", yaxis_title="累積報酬率 (%)", hovermode="x unified",
-        paper_bgcolor='#0E1117', plot_bgcolor='#0E1117',
-        margin=dict(l=20, r=20, t=20, b=20), legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-    )
-    fig.update_xaxes(showgrid=True, gridcolor='#22252D')
-    fig.update_yaxes(showgrid=True, gridcolor='#22252D')
-    st.plotly_chart(fig, width='stretch')
+        raw_ret_1 = close[valid_tickers].pct_change(1,
