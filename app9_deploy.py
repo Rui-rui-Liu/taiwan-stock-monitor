@@ -9,7 +9,7 @@ import plotly.graph_objects as go
 st.set_page_config(page_title="台股族群漲跌幅", layout="wide")
 
 # ==========================================
-# 【全域 UI 強制修正】：經典黑底風格 CSS 注入
+# 【全域 UI 與 RWD 自適應 CSS 注入】
 # ==========================================
 st.markdown("""
 <style>
@@ -62,11 +62,11 @@ st.markdown("""
     div.stButton > button:focus p,
     div.stButton > button:focus span {
         background-color: transparent !important;
-        color: #FFFFFF !important;
+        color: #FFFFFF !important; 
         border: none !important;
         box-shadow: none !important;
     }
-    /* 排序三角形按鈕：改用小尺寸、貼近標題，覆蓋掉上面的大字純白按鈕樣式 */
+    /* 排序三角形按鈕：改用小尺寸、貼近標題 */
     [class*="st-key-sortbtn_"] div.stButton > button,
     [class*="st-key-sortbtn_"] div.stButton > button p,
     [class*="st-key-sortbtn_"] div.stButton > button span {
@@ -86,6 +86,24 @@ st.markdown("""
     [class*="st-key-sortbtn_"] div.stButton > button:hover span {
         color: #FF8500 !important;
     }
+
+    /* ==========================================
+       📱 手機極致卡片式 (RWD Media Query) 媒體查詢
+       ========================================== */
+    @media (max-width: 768px) {
+        /* 隱藏桌機版的標頭 */
+        .desktop-header-row {
+            display: none !important;
+        }
+        /* 將每一列重構為獨立精美卡片 */
+        .group-card-container {
+            background-color: #161B22;
+            border: 1px solid #30363D;
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 12px;
+        }
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -94,7 +112,6 @@ st.markdown("""
 # ==========================================
 @st.cache_data
 def load_data():
-    # 優先讀取雲端隱密設定（Secrets），若沒有（例如在本機執行）則讀取本機憑證
     api_token = st.secrets.get("finlab", {}).get("api_token", None)
     if api_token:
         finlab.login(api_token)
@@ -299,7 +316,7 @@ def get_status_html(status):
         return '<div style="background-color:#E8E8E8; color:#666666; padding:2px 8px; border-radius:12px; font-size:12px; display:inline-block; margin-top:-22px; margin-bottom:10px;">🟢 近似大盤</div>'
     return ''
 
-# 個股成交量 (先除以1000換算張數再加總，格式化為整數，並清除柱子上方的日期標籤)
+# 個股成交量圖
 def draw_spark_volume(g_name, tickers_list):
     valid_v = [t for t in tickers_list if t in volume.columns]
     if not valid_v: return
@@ -327,7 +344,7 @@ def draw_spark_volume(g_name, tickers_list):
     )
     st.plotly_chart(fig, width='stretch', config={'displayModeBar': False}, key=f"vol_bar_{g_name}")
 
-# 大盤成交金額改為「億元（1位小數）」，並清除柱子上方標籤
+# 大盤成交金額圖
 def draw_market_volume_amt():
     m_amt_series = twii_amount.tail(20).ffill() / 10**8
     
@@ -398,7 +415,7 @@ def draw_spark_stock_trends_svg(ticker_dict):
             st.markdown(svg_html, unsafe_allow_html=True)
 
 # ==========================================
-# 4. 主要主頁表格渲染
+# 4. 主要主頁表格渲染 (支援 RWD 自適應卡片化)
 # ==========================================
 st.title("台股族群漲跌幅")
 st.markdown("<br>", unsafe_allow_html=True)
@@ -421,8 +438,10 @@ def render_sort_header(col, label, period):
                 cycle_sort(period)
                 st.rerun()
 
+# 標頭加入桌機專用類別 (desktop-header-row)
+st.markdown("<div class='desktop-header-row'>", unsafe_allow_html=True)
 col_h_space, col_h_name, col_h_d, col_h_w, col_h_m, col_h_q, col_h_v = st.columns([0.01, 1.75, 1.2, 1.2, 1.2, 1.2, 1.4])
-with col_h_space: st.write("") # 留空，用來當作左邊的填充
+with col_h_space: st.write("")
 with col_h_name: st.markdown("<span style='font-size: 1.5rem;'>族群名稱</span>", unsafe_allow_html=True)
 render_sort_header(col_h_d, "近日報酬", "1")
 render_sort_header(col_h_w, "近週報酬", "5")
@@ -430,6 +449,7 @@ render_sort_header(col_h_m, "近月報酬", "20")
 render_sort_header(col_h_q, "近季報酬", "60")
 with col_h_v: st.markdown("<span style='font-size: 1.5rem;'>近月量能/走勢</span>", unsafe_allow_html=True)
 st.markdown("<hr style='margin: 5px 0 15px 0; border-top: 2px solid #ccc;'>", unsafe_allow_html=True)
+st.markdown("</div>", unsafe_allow_html=True)
 
 df_computed = get_sorted_df(df_computed_raw)
 
@@ -450,17 +470,22 @@ with st.container(height=550):
     if not df_computed.empty:
         for _, row in df_computed.iterrows():
             g_name = row['族群名稱']
+            
+            # 用 group-card-container 包裹，提供手機端獨立黑底卡片外框
+            st.markdown("<div class='group-card-container'>", unsafe_allow_html=True)
+            
             col_n, col_d, col_w, col_m, col_q, col_v = st.columns([1.8, 1.2, 1.2, 1.2, 1.2, 1.4])
             
             with col_n:
-                # 獨佔式展開機制
+                # 獨佔式展開按鈕
                 if st.button(g_name, key=f"btn_{g_name}"):
                     if st.session_state['expanded_group'] == g_name:
                         st.session_state['expanded_group'] = None
                     else:
                         st.session_state['expanded_group'] = g_name
                     
-            with col_d: st.metric(label="1D", label_visibility="collapsed", value=row['報酬_1'])
+            with col_d: 
+                st.metric(label="1D", label_visibility="collapsed", value=row['報酬_1'])
             with col_w:
                 st.metric(label="5D", label_visibility="collapsed", value=row['報酬_5'])
                 st.markdown(get_status_html(row['狀態_5']), unsafe_allow_html=True)
@@ -477,7 +502,8 @@ with st.container(height=550):
                 st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
                 draw_spark_stock_trends_svg(groups[g_name])
                 
-            st.markdown("<hr style='margin: 12px 0 15px 0; border-top: 1px solid #333;'>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown("<hr style='margin: 8px 0 12px 0; border-top: 1px solid #333;'>", unsafe_allow_html=True)
 
 # ==========================================
 # 5. 下半部網頁呈現：大盤歷史對照圖
